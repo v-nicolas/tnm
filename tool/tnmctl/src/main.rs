@@ -38,5 +38,3 @@ fn main() {
         PROGNAME, PROGNAME, NM_TIMEOUT_MIN, NM_TIMEOUT_MAX, NM_FREQ_MIN, NM_FREQ_MAX
     );
 }
-
-fn list() {}
