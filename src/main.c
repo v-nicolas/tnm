@@ -49,6 +49,7 @@ static void version(void);
 enum program_arguments {
     ARG_NO_HOST_FILE,
     ARG_NO_DB,
+    ARG_CONFIG_FILE,
 };
 
 const char *progname;
@@ -59,8 +60,8 @@ main(int argc, char **argv)
     int ret;
 
     nm_init(argv[0]);
-    parse_config_file();
     parse_program_options(argc, argv);
+    parse_config_file();
     daemonize();
     nm_prepare();
     ret = nm_run();
@@ -71,6 +72,7 @@ main(int argc, char **argv)
 static void
 parse_config_file(void)
 {
+    int error;
     const char *path = NULL;
     cJSON *m = NULL;
     char buffer[1024];
@@ -81,16 +83,21 @@ parse_config_file(void)
 	.sval = buffer,
 	.err = {0},
     };
-    
-    path = files_access(CONF_FILE_ETC_DIR, CONF_FILE_LOCAL_DIR, R_OK);
-    if (path == NULL) {
-	warn("config file path is empty.\n");
-	return;
+
+    if (nm->conf_file[0] == 0) {
+	path = files_access(CONF_FILE_ETC_DIR, CONF_FILE_LOCAL_DIR, R_OK);
+	if (path == NULL) {
+	    warn("config file path is empty.\n");
+	    return;
+	}
+	strncpy(nm->conf_file, path, (PATH_SIZE-1));
     }
-    strncpy(nm->conf_file, path, (PATH_SIZE-1));
-    
-    m = json_parse_file(path);
+
+    m = json_parse_file(nm->conf_file, &error);
     if (m == NULL) {
+	if (error == JSON_RDFILE_ERROR) {
+	    
+	}
 	return;
     }
 
@@ -109,7 +116,7 @@ parse_config_file(void)
 	    nm->db_type = DB_TYPE_FILE;
 	}
     }
-    
+
     set_config_var(m, "script_path", nm->script_path, PATH_SIZE, &jvar);
     set_config_var(m, "pid_file", nm->pid_file, PATH_SIZE, &jvar);
     set_config_var(m, "script", nm->script_path, PATH_SIZE, &jvar);
@@ -141,6 +148,7 @@ parse_program_options(int argc, char **argv)
 	{"help",           no_argument,       NULL, 'h'},
 	{"version",        no_argument,       NULL, 'v'},
 	{"daemon",         no_argument,       NULL, 'd'},
+	{"conf",           required_argument, NULL, ARG_CONFIG_FILE},
 	{"pid-file",       required_argument, NULL, 'P'},
 	{"no-db",          no_argument,       NULL, ARG_NO_DB},
 	{"ctl-sock-path",  required_argument, NULL, 'c'},
@@ -165,6 +173,9 @@ parse_program_options(int argc, char **argv)
 	    break;
 	case 'd':
 	    nm->bg = 1;
+	    break;
+	case ARG_CONFIG_FILE:
+	    strncpy(nm->conf_file, optarg, (PATH_SIZE-1));
 	    break;
 	    
 	case 'P':
@@ -268,6 +279,7 @@ usage(void)
            "  -h, --help            : Show usage and exit.\n"
            "  -v, --version         : Show version and exit.\n"
            "  -d, --daemon          : Run the program in background.\n"
+	   "      --conf            : Set the configuration path file.\n"
            "  -P, --pid-file        : Set the full path to write the daemon PID "
 	   "(defailt: /run/nm.pid).\n"
 	   "      --no-db           : Cannot use a database.\n"

@@ -20,6 +20,7 @@
 #ifndef NM_MONGO_H
 #define NM_MONGO_H
 
+# ifdef HAVE_MONGOC
 /* bson.h warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-conversion"
@@ -42,5 +43,7 @@ int mongo_update_host_state(void *data);
 int mongo_delete_all(const char *coll_name);
 void mongo_close(mongoc_client_t *client);
 int mongo_free(void *data);
+
+# endif /* HAVE_MONGOC */
 
 #endif /* !NM_MONGO_H */

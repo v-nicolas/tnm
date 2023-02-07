@@ -32,7 +32,18 @@
 int
 db_file_test_open(void *data ATTR_UNUSED)
 {
-    return (files_access(nm->hosts_path, NULL, R_OK | W_OK) == NULL) ? -1 : 0;
+    FILE *file = NULL;
+    
+    if (files_access(nm->hosts_path, NULL, R_OK | W_OK) == NULL) {
+	/* Try to create file */
+	file = fopen(nm->hosts_path, "w+");
+	if (file == NULL) {
+	    err("Fail to create file database <%s> error: %s\n",
+		nm->hosts_path, STRERRNO);
+	    return -1;
+	}
+    }
+    return 0;
 }
 
 int
@@ -76,6 +87,7 @@ db_file_host_update(void *data ATTR_UNUSED)
 int
 db_file_host_load(void *data)
 {
+    int error;
     cJSON *monitor = NULL;
     cJSON *json_host = NULL;
     const cJSON *json_hosts = NULL;
@@ -86,9 +98,9 @@ db_file_host_load(void *data)
 	return -1;
     }
 
-    monitor = json_parse_file(path);
+    monitor = json_parse_file(path, &error);
     if (monitor == NULL) {
-	return -1;
+	return (error == JSON_RDFILE_ERROR) ? -1 : 0;
     }
 
     json_hosts = cJSON_GetObjectItemCaseSensitive(monitor, "hosts");

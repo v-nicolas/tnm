@@ -1,0 +1,10 @@
+
+	CHANGELOG
+
+
+  07.02.2023 tnm-unstable_0.2.0:
+	- Compil if libssl is not installed.
+	- Compil if libmongoc is not installed.
+	- Add a verry little README.
+	- Add configuration example to use a database type file.
+	- Add new program argument --conf to set the configuration file path.

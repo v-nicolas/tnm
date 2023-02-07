@@ -137,6 +137,7 @@ nm_prepare(void)
     if ((nm->options & OPT_NO_DB) == 0) {
 	if (nm->hosts_path[0] != 0) {
 	    if (db_host_load(nm->hosts_path) < 0) {
+		fatal("Fail to load host.\n");
 		exit(-1);
 	    }
 	}
@@ -660,9 +661,11 @@ nm_host_monitoring(void *arg)
     return 0;
 }
 
+#ifdef HAVE_SSL
 static int
 nm_ssl_init(struct sock *sock)
 {
+
     if (ssl_init(sock) < 0) {
 	return -1;
     }
@@ -672,6 +675,13 @@ nm_ssl_init(struct sock *sock)
     sock->close = ssl_close;
     return 0;
 }
+#else
+static int
+nm_ssl_init(struct sock *sock ATTR_UNUSED)
+{
+    return 0;
+}
+#endif /* HAVE_SSL */
 
 static void
 nm_eval_monitoring_res(struct host *host, int *last_state,

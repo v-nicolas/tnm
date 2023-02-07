@@ -41,26 +41,27 @@
 #define NM_INVALID_TIMEOUT(t) (t < NM_TIMEOUT_MIN || t > NM_TIMEOUT_MAX)
 #define NM_INVALID_PORT(p) (p < NM_PORT_MIN || p > NM_PORT_MAX)
 
-#define NM_ERR_UNKNOW               "Unknown error occurred."
-#define NM_ERR_TIMEOUT              "Operation timeouted."
-#define NM_ERR_JSON_INVALID         "Fail to parse JSON." /* todo: is used ? */
-#define NM_ERR_TYPE_INVALID         "Command type missing or invalid."
-#define NM_ERR_UUID_MISSING         "UUID missing or empty."
-#define NM_ERR_UUID_NOT_FOUND       "UUID not found."
-#define NM_ERR_UUID_ALREADY_USED    "UUID already used."
-#define NM_ERR_UUID_GENERATE        "Fail to generate new UUID."
-#define NM_ERR_MONIT_TYPE_INVALID   "Monitoring type invalid or empty."
-#define NM_ERR_ADDR_MISSING         "Host IP and hostname is empty."
-#define NM_ERR_FREQ_INVALID         "Frequency invalid."
-#define NM_ERR_TIMEOUT_INVALID      "Timeout invalid."
-#define NM_ERR_PORT_INVALID         "Port out of range."
-#define NM_ERR_IP_VERSION_INVALID   "IP version invalid."
-#define NM_ERR_RESOLV_ADDR_FAIL     "Cannot resolv address."
-#define NM_ERR_START_PROCESS_FAIL   "Cannot start new processus."
-#define NM_ERR_KILL_PROCESS_FAIL    "Cannot kill the processus."
-#define NM_ERR_HTTP_METHOD_INVALID  "HTTP method invalid."
-#define NM_ERR_HTTP_AUTH_INVALID    "HTTP auth invalid."
-#define NM_ERR_RELOAD_CRITICAL      "Reload hosts fail, maybe need restart the program."
+#define NM_ERR_UNKNOW                "Unknown error occurred."
+#define NM_ERR_TIMEOUT               "Operation timeouted."
+#define NM_ERR_JSON_INVALID          "Fail to parse JSON." /* todo: is used ? */
+#define NM_ERR_TYPE_INVALID          "Command type missing or invalid."
+#define NM_ERR_UUID_MISSING          "UUID missing or empty."
+#define NM_ERR_UUID_NOT_FOUND        "UUID not found."
+#define NM_ERR_UUID_ALREADY_USED     "UUID already used."
+#define NM_ERR_UUID_GENERATE         "Fail to generate new UUID."
+#define NM_ERR_MONIT_TYPE_INVALID    "Monitoring type invalid or empty."
+#define NM_ERR_ADDR_MISSING          "Host IP and hostname is empty."
+#define NM_ERR_FREQ_INVALID          "Frequency invalid."
+#define NM_ERR_TIMEOUT_INVALID       "Timeout invalid."
+#define NM_ERR_PORT_INVALID          "Port out of range."
+#define NM_ERR_IP_VERSION_INVALID    "IP version invalid."
+#define NM_ERR_RESOLV_ADDR_FAIL      "Cannot resolv address."
+#define NM_ERR_START_PROCESS_FAIL    "Cannot start new processus."
+#define NM_ERR_KILL_PROCESS_FAIL     "Cannot kill the processus."
+#define NM_ERR_HTTP_METHOD_INVALID   "HTTP method invalid."
+#define NM_ERR_HTTP_AUTH_INVALID     "HTTP auth invalid."
+#define NM_ERR_RELOAD_CRITICAL       "Reload hosts fail, maybe need restart the program."
+#define NM_ERR_NO_COMPIL_WITH_LIBSSL "Add new host with SSL option fail, this program not compiled with libssl"
 
 enum commands_names {
     CMD_ERROR         = -1,

@@ -17,6 +17,10 @@
  *  along with tnm. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef HAVE_MONGOC
+extern const char *progname;
+#else
+
 #include "mongo.h"
 #include "nm.h"
 #include "host.h"
@@ -222,6 +226,7 @@ mongo_parse_host_collection(mongoc_collection_t *collection, bson_t *filter)
 
     cursor = mongoc_collection_find_with_opts(collection, filter, NULL, NULL);
     if (cursor == NULL) {
+	err("mongoc_collection_find_with_opts fail.\n");
 	return -1;
     }
     
@@ -323,6 +328,7 @@ mongo_connect_to_collection(mongoc_client_t **client,
     
     *client = mongo_connect(nm->hosts_path);
     if (*client == NULL) {
+	err("Fail to connect at database: %s\n", nm->hosts_path);
 	return -1;
     }
     if (xmongoc_get_collection(*client, collection, coll_name) < 0) {
@@ -452,3 +458,4 @@ mongo_free(void *data ATTR_UNUSED)
     }
     return 0;
 }
+#endif /* HAVE_MONGOC */

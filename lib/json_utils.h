@@ -36,6 +36,12 @@
 #define JSON_SET_LONG(x, y)   #x": %ld,", y
 #define JSON_SET_STR(x, y)    #x": \"%s\",", y
 
+enum json_read_file_status {
+    JSON_RDFILE_SUCCESS,
+    JSON_RDFILE_ERROR,
+    JSON_RDFILE_IS_EMPTY,
+};
+
 enum json_options {
     JSON_OPT_OMITEMPTY = (1 << 0),
 };
@@ -96,6 +102,6 @@ static inline void json_close(struct sbuf *str, const char *close_ch) {
 
 int json_get_var(cJSON *monitor, struct json_var *var);
 int json_get_var_opts(cJSON *monitor, struct json_var *var, unsigned int options);
-cJSON * json_parse_file(const char *path);
+cJSON * json_parse_file(const char *path, int *error);
 
 #endif /* not have LIB_JSON_UTILS_H */

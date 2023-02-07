@@ -24,6 +24,13 @@
 #include "sbuf.h"
 #include "json_utils.h"
 
+#define JSON_RDFILE_SET_ERR(e, status)	\
+    do {					\
+	if (e != NULL) {			\
+	    *e = -status;			\
+	}					\
+    } while (0)
+
 int
 json_get_var(cJSON *monitor, struct json_var *var)
 {
@@ -85,24 +92,36 @@ json_get_var_opts(cJSON *monitor, struct json_var *var, unsigned int options)
 }
 
 cJSON *
-json_parse_file(const char *path)
+json_parse_file(const char *path, int *error)
 {
     int ret;
     cJSON *monitor = NULL;
     struct sbuf str = SBUF_INIT;
-    
+
+    JSON_RDFILE_SET_ERR(error, JSON_RDFILE_SUCCESS);
     ret = sbuf_read_file(&str, path);
     if (ret < 0) {
 	err("read file <%s> %s: %s\n", path,
 	    sbuf_rdfile_get_func_fail(ret), STRERRNO);
 	sbuf_free(&str);
+	JSON_RDFILE_SET_ERR(error, JSON_RDFILE_ERROR);
 	return NULL;
     }
+
+    if (sbuf_len(&str) == 0) {
+	JSON_RDFILE_SET_ERR(error, JSON_RDFILE_IS_EMPTY);
+	warn("json file <%s> is empty\n", path);
+	sbuf_free(&str);
+	return 0;
+    }
+    
     monitor = cJSON_Parse(str.buf);
     sbuf_free(&str);
     if (monitor == NULL) {
 	err("JSON parse file <%s>: %s\n", path, cJSON_GetErrorPtr2());
+        JSON_RDFILE_SET_ERR(error, JSON_RDFILE_ERROR);
 	return NULL;
     }
+
     return monitor;
 }

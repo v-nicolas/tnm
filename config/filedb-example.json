@@ -1,0 +1,9 @@
+{
+    "daemon": "no",
+    "pid_file":"/var/run/nm.pid",
+    "db_type": "file",
+    "hosts_path": "./host-db.json",
+    "socket-private": "/tmp/nm_priv.sock",
+    "socket-control": "/tmp/nm_ctl.sock",
+    "script": "./script/example.sh"
+}

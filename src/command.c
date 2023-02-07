@@ -181,6 +181,14 @@ cmd_add_host(struct cmd *cmd)
 	return -1;
     }
 
+    /* Check the SSL library */
+#ifndef HAVE_SSL
+    if (cmd->host->options & MONIT_OPT_SSL) {
+	cmd->error = dump_err(NM_ERR_NO_COMPIL_WITH_LIBSSL);
+	return -1;
+    }
+#endif /* !HAVE_SSL */
+
     process = host_add(cmd->host, &cmd->error);
     if (process == NULL) {
 	return -1;

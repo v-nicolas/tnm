@@ -25,9 +25,9 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#ifdef USE_SSL
+#ifdef HAVE_SSL
 # include <openssl/ssl.h>
-#endif /* USE_SSL */
+#endif /* HAVE_SSL */
 
 #define PORT_STR_LEN 6
 
@@ -59,10 +59,10 @@ struct sock {
     int family;
     int type;
     int proto;
-#ifdef USE_SSL
+#ifdef HAVE_SSL
     SSL *ssl;
     SSL_CTX *ssl_ctx;
-#endif /* USE_SSL */
+#endif /* HAVE_SSL */
     socklen_t addrlen;
     struct sockaddr_storage addr;
     char straddr[INET6_ADDRSTRLEN];

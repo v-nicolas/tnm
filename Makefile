@@ -48,9 +48,9 @@ CFLAGS=		-g2 -O0 -W -Wall -Wextra -pedantic -Wpedantic -std=c11 \
 		-Wtrampolines -pie -fPIE \
 		-D_FORTIFY_SOURCE=2 \
 		-D_GNU_SOURCE \
+		-DHAVE_SSL -DHAVE_MONGOC \
 		-D_XOPEN_SOURCE=700 \
 		-DENABLE_CJSON_TEST=Off \
-		-DUSE_SSL \
 		-DENABLE_CJSON_UTILS=On
 
 LDFLAGS= -Isrc/ -lssl -lcrypto -I/usr/include/libbson-1.0 -I/usr/include/libmongoc-1.0 -lmongoc-1.0 -lbson-1.0 #$(pkg-config --libs --cflags libmongoc-1.0)
@@ -78,6 +78,7 @@ clang:		CFLAGS=-I src/ -W -Wall -Wextra -pedantic -Wpedantic -std=c11 \
 			-Wstrict-prototypes -Wswitch-default -Wwrite-strings  \
 			-Wmissing-prototypes -Wformat-security -fstack-protector-strong \
 			-pie -fPIE \
+			-DHAVE_SSL -DHAVE_MONGOC \
 			-D_FORTIFY_SOURCE=2 \
 			-D_GNU_SOURCE -D_XOPEN_SOURCE=700 \
 			-DENABLE_CJSON_UTILS=On -DENABLE_CJSON_TEST=Off
@@ -106,7 +107,7 @@ uninstall:
 		@rm /usr/bin/$(TOOL)
 
 clean:
-		@rm ./*/*~ ./*/*.o; 2>/dev/null
+		@rm ./*~ ./*/*~ ./*/*.o; 2>/dev/null
 
 
 distclean:

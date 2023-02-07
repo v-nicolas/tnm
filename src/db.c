@@ -37,6 +37,7 @@ db_init(int db_type)
 	db.host_load = &db_file_host_load;
 	db.uuid_exists = &db_file_uuid_exists;
     } else if (db_type == DB_TYPE_MONGO) {
+#ifdef HAVE_MONGOC
 	db.test_connection = &mongo_test_connection;
 	db.host_add = &mongo_host_add;
 	db.host_del = &mongo_host_del;
@@ -44,6 +45,9 @@ db_init(int db_type)
 	db.uuid_exists = &mongo_uuid_exists;
 	db.free = &mongo_free;
 	db.host_state_change = &mongo_update_host_state;
+#else
+	fatal("Program not compiled with libmongoc.\n");
+#endif /* HAVE_MONGOC */
     } else {
 	fatal("Database type not set.\n");
     }

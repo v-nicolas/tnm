@@ -21,12 +21,12 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/time.h>
-#ifdef USE_SSL
+#ifdef HAVE_SSL
 # include <openssl/crypto.h>
 # include <openssl/x509.h>
 # include <openssl/pem.h>
 # include <openssl/err.h>
-#endif /* USE_SSL */
+#endif /* HAVE_SSL */
 
 #include "sock.h"
 
@@ -37,9 +37,9 @@
 static int sock_set_non_block(int sockfd);
 static int socku_set_path(const char *path, struct sockaddr_un *un);
 static int sock_eval_res(ssize_t res);
-#ifdef USE_SSL
+#ifdef HAVE_SSL
 static const char *ssl_get_err(void);
-#endif /* USE_SSL */
+#endif /* HAVE_SSL */
 
 int
 socku_server_create(const char *path)
@@ -508,7 +508,7 @@ sock_addr_to_str(int family, char *straddr, struct sockaddr_storage *addr)
     return 0;
 }
 
-#ifdef USE_SSL
+#ifdef HAVE_SSL
 int
 ssl_init(struct sock *sock)
 {
@@ -630,4 +630,4 @@ ssl_get_err(void)
     }
     return error;
 }
-#endif /* USE_SSL */
+#endif /* HAVE_SSL */
