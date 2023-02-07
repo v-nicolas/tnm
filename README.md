@@ -53,4 +53,4 @@ tnmctl -r --uuid UUID
 ```
 
 ### UPDATE HOST
-    Not yen possible, just delete and add new host with the modification.
+    Not yet possible, just delete and add new host.
