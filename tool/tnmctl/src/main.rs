@@ -1,5 +1,5 @@
 fn main() {
-    let progname = ""; // TODO
+    const PROGNAME: &str = "tnmctl";
     const NM_TIMEOUT_MIN: i16 = 10;
     const NM_TIMEOUT_MAX: i16 = 20;
     const NM_FREQ_MIN: i16 = 20;
@@ -35,6 +35,6 @@ fn main() {
 	         --http-user-agent    : Set HTTP user agent.\n
 	         --http-auth-type     : Set HTTP authentification type (example: Basic or Bearer)\n.
 	         --http-auth-value    : Set HTTP authentification value (token or other).\n",
-        progname, progname, NM_TIMEOUT_MIN, NM_TIMEOUT_MAX, NM_FREQ_MIN, NM_FREQ_MAX
+        PROGNAME, PROGNAME, NM_TIMEOUT_MIN, NM_TIMEOUT_MAX, NM_FREQ_MIN, NM_FREQ_MAX
     );
 }
