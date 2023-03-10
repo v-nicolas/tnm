@@ -1,11 +1,9 @@
 # tnm
 
-Description:
-```
-Tiny network monitoring - Check that your server is online.
-```
+TNM is short for **Tiny Network Monitoring**, it is a system that enables you to check that your servers are online.
 
 ### COMPILATION
+
 ```
     make release
     sudo make install
@@ -13,11 +11,15 @@ Tiny network monitoring - Check that your server is online.
 
 ### DEPENDENCIES
 
-    1. libmongoc (with APT system: apt install libmongoc-dev)
-    2. libssl (with APT system: apt install libssl-dev)
+TNM currently has the following dependencies:
 
-    Possibility to disable thios option.
-    For this delete in Makefile this line:
+1. `libmongoc`, which can be installed on machines with the apt package manager (like Debian) 
+using the command `apt install libmongoc-dev`
+2. `libssl` which can be installed on machines with the apt package manager 
+using `apt install libssl-dev`
+
+It is possible to disable the thios option by removing the following line from the Makefile:
+
 ```
                             -DHAVE_SSL -DHAVE_MONGOC \
 ```
@@ -41,16 +43,24 @@ Tiny network monitoring - Check that your server is online.
 ```
 
 ### LIST HOSTS
+
+To list hosts, use the `-l` flag:
 ```
 tnmctl -l
 
-Possiblity to clean output with jq: tnmctl -l | jq
+```
+
+It is possible to use [jq](https://stedolan.github.io/jq/) to format the output data for easier reading.
+```
+tnmctl -l | jq
 ```
 
 ### DELETE HOST
+
+To delete a host, use the `-r` flag to specify deletion, and the `--uuid` flag to specify the UUID of the host to delete.
 ```
 tnmctl -r --uuid UUID
 ```
 
 ### UPDATE HOST
-    Not yet possible, just delete and add new host.
+It is not yet possible to update a host, but deleting the host and adding the new version has the same effect.
