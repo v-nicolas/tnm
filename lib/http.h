@@ -24,10 +24,6 @@
 
 #include "sbuf.h"
 
-#define HTTP_STATUS_CODE_SIZE 5
-#define HTTP_PATH_SIZE 255
-#define HTTP_USER_AGENT_SIZE 255
-
 #define HTTP_AUTH_BASIC  "Basic"
 #define HTTP_AUTH_BEARER "Bearer"
 
@@ -48,16 +44,29 @@
 
 #define HTTP_USER_AGENT_DEFAULT "Default-http-lib-agent"
 
+#define HTTP_CONTENT_TYPE_STR	"Content-Type:"
+#define HTTP_CONTENT_LEN_STR	"Content-Length"
+#define HTTP_AUTHORIZATION_STR	"Authorization:"
+
+#define HTTP_STATUS_CODE_SIZE 5
+#define HTTP_PATH_SIZE 2048
+#define HTTP_USER_AGENT_SIZE 255
+#define HTTP_CONTENT_TYPE_SIZE 64
+#define HTTP_AUTHORIZATION_SIZE 255
+
 struct http_header {
     /* Basic, Bearer ... */
-    char *auth_type;
     char *auth_value;
+    char *payload;
+    char *param;
     
     struct sbuf header;
     char version[HTTP_VERSION_SIZE];
     char method[HTTP_METHOD_SIZE];
     char path[HTTP_PATH_SIZE];
     char user_agent[HTTP_USER_AGENT_SIZE];
+    char auth_type[HTTP_AUTHORIZATION_SIZE];
+    char content_type[HTTP_CONTENT_TYPE_SIZE];
 };
 
 static inline int http_check_method(const char *s) {
@@ -68,7 +77,7 @@ static inline int http_check_method(const char *s) {
 	     !strcmp(s, HTTP_PUT) ||
 	     !strcmp(s, HTTP_POST) ||
 	     !strcmp(s, HTTP_DELETE) ||
-	     !strcmp(s, HTTP_PATCH)));
+	     !strcmp(s, HTTP_PATCH))) ? 0 : -1;
 }
 
 static inline int http_check_version(const char *s) {
@@ -76,11 +85,18 @@ static inline int http_check_version(const char *s) {
 	    (!strcmp(s, HTTP_VERSION_1) ||
 	     !strcmp(s, HTTP_VERSION_1_1) ||
 	     !strcmp(s, HTTP_VERSION_2) ||
-	     !strcmp(s, HTTP_VERSION_3)));
+	     !strcmp(s, HTTP_VERSION_3))) ? 0 : -1;
 }
 
 void http_header_free(struct http_header *http);
+void http_header_free_data(struct http_header *http);
 void http_make_header(struct http_header *http, const char *host, const char *ip);
 int http_get_status_code(const char *str);
+int http_parse_first_line(struct http_header *http);
+int http_get_content_type(const char *str, char *content_type);
+char *http_get_payload(const char *str);
+int http_get_authorization(const char *str, char *auth_type, char **value);
+int http_get_route(const char *str);
+void http_delete_header_payload(char *str);
 
 #endif /* !NM_HTTP_H */

@@ -44,7 +44,7 @@ test_bin() {
 #########
 if [ ${COMPIL} -eq 1 ]; then
     echo -n "Compil mongo test ... "
-    gcc -o mongo_test test_mongo.c ../src/nm.c ../src/command.c ../src/icmp.c ../src/db.c ../src/db_file.c ../src/host.c ../src/misc.c ../lib/*.c -I../lib/ -I../src/ -I/usr/include/libmongoc-1.0 -lmongoc-1.0 -lbson-1.0 -I/usr/include/libbson-1.0 -lpthread -lssl -lcrypto -DUSE_SSL -g2 -O0 1>/dev/null
+    gcc -o mongo_test test_mongo.c ../src/nm.c ../src/command.c ../src/icmp.c ../src/db.c ../src/db_file.c ../src/host.c ../src/misc.c ../lib/*.c -I../lib/ -I../src/ -I/usr/include/libmongoc-1.0 -lmongoc-1.0 -lbson-1.0 -I/usr/include/libbson-1.0 -lpthread -lssl -lcrypto -DHAVE_SSL -DHAVE_MONGOC -g2 -O0 1>/dev/null
     compil_res
 fi
 test_bin "mongo" ./mongo_test
@@ -58,3 +58,12 @@ if [ ${COMPIL} -eq 1 ]; then
     compil_res
 fi
 test_bin "command" ./cmd_test
+
+### lib HTTP
+############
+if [ ${COMPIL} -eq 1 ]; then
+    echo -n "Compil lib/http test ..."
+    gcc -g2 -o lib_http_test test_lib_http.c ../lib/mem.c ../lib/sbuf.c ../lib/str.c ../lib/log.c ../lib/file_utils.c  1>/dev/null
+    compil_res
+fi
+test_bin "mongolib_http" ./lib_http_test

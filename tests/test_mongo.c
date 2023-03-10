@@ -1,10 +1,12 @@
 
 #include <assert.h>
 
+#include "../src/nm.h"
 #include "../lib/mem.h"
 #include "../lib/log.h"
 
 #include "../src/mongo.c"
+#include "../src/mongo.h"
 
 static void test_mongo(void);
 static void test_delete_all(void);

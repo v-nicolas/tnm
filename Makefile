@@ -28,7 +28,8 @@ PROG_CSOURCE=	$(PROG_SRC)main.c	\
 		$(LIB)sbuf.c		\
 		$(LIB)uuid.c		\
 		$(LIB)json_utils.c	\
-		$(LIB)cJSON.c
+		$(LIB)cJSON.c		\
+		$(LIB)api_rest.c
 
 TOOL_CSOURCE=	$(TOOL_SRC)main.c
 

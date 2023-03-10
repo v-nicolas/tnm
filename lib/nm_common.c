@@ -105,7 +105,7 @@ nm_check_http_method(const char *str, char **err)
     int ret;
     
     NM_ERR_RESET(err, ret);
-    if (http_check_method(str) == 0) {
+    if (http_check_method(str) < 0) {
 	NM_ERR_SET(err, NM_ERR_HTTP_METHOD_INVALID, ret);
     }
     return ret;
@@ -117,7 +117,7 @@ nm_check_http_version(const char *str, char **err)
     int ret;
     
     NM_ERR_RESET(err, ret);
-    if (http_check_version(str) == 0) {
+    if (http_check_version(str) < 0) {
 	NM_ERR_SET(err, NM_ERR_HTTP_METHOD_INVALID, ret);
     }
     return ret;
@@ -129,8 +129,8 @@ nm_check_http_auth(const char *auth_type, const char *auth_value, char **err)
     int ret;
     
     NM_ERR_RESET(err, ret);
-    if ((auth_type != NULL && auth_value == NULL) ||
-	(auth_type == NULL && auth_value != NULL)) {
+    if ((auth_type[0] != 0 && auth_value == NULL) ||
+	(auth_type[0] == 0 && auth_value != NULL)) {
 	NM_ERR_SET(err, NM_ERR_HTTP_AUTH_INVALID, ret);
     }
     return ret;

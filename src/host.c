@@ -206,7 +206,8 @@ host_parse_json(struct host *host, cJSON *json_host)
         JSON_INIT_STR(HTTP_PATH_SIZE, "http_path", host->http->path),
         JSON_INIT_STR(HTTP_USER_AGENT_SIZE, "http_user_agent",
 		      host->http->user_agent),
-        JSON_INIT_STRPTR("http_auth_type", &host->http->auth_type),
+        JSON_INIT_STR(HTTP_AUTHORIZATION_SIZE, "http_auth_type",
+		      host->http->auth_type),
         JSON_INIT_STRPTR("http_auth_value", &host->http->auth_value),
         JSON_INIT_LAST,
     };

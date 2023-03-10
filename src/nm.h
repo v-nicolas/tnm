@@ -20,16 +20,21 @@
 #ifndef NM_H
 #define NM_H
 
+#include <netinet/in.h>
+
 #include "../lib/attr.h"
 #include "../lib/uuid.h"
 #include "../lib/thread.h"
 #include "../lib/cJSON.h"
 #include "../lib/file_utils.h"
+#include "../lib/api_rest.h"
 
 #define PKT_MAX_SIZE 0xffff
 
 enum program_options {
-    OPT_NO_DB = (1 << 0),
+    OPT_NO_DB		 = (1 << 0),
+    OPT_RUN_BG		 = (1 << 1),
+    OPT_DISABLE_API_REST = (1 << 2),
 };
 
 enum nm_process_state {
@@ -66,7 +71,6 @@ struct nm_process {
 };
 
 struct nm {
-    int bg;
     int run;
     int ctl_fd;
     int priv_fd;
@@ -77,6 +81,7 @@ struct nm {
     thread_mutex_t run_mutex;
     char *ctl_sock_path;
     char *priv_sock_path;
+    struct api_rest *api;
     struct nm_process *monitoring;
     struct nm_process *script;
     struct nm_process_suspend *suspend;

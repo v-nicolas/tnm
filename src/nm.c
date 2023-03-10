@@ -67,7 +67,8 @@ static void nm_process_suspend(void);
 static int nm_process_suspend_check_duration(struct nm_process *process,
 					     struct nm_process_suspend **suspend,
 					     unsigned int options);
-static int nm_accept_client(int fd);
+static int nm_accept_client(int fd, int sock_type);
+static void nm_api_rest_cmd(int cli_fd);
 static void nm_update_host_state(int fdcli);
 static int nm_script_exec(void *arg);
 static void nm_terminate_threads(void);
@@ -89,7 +90,8 @@ nm_init(const char *pname)
     
     set_program_name(pname);
     log_init_default_output();
-    
+
+    nm->api = api_rest_new();
     nm->ctl_sock_path = xstrdup(SOCKU_CTL_DEFAULT_PATH);
     nm->priv_sock_path = xstrdup(SOCKU_PRIV_DEFAULT_PATH);
     if (MUTEX_INIT(&nm->run_mutex) < 0) {
@@ -104,11 +106,15 @@ nm_free(void)
     nm_process_kill_all_and_free(nm->script);
     nm_process_kill_all_and_free(nm->monitoring);
     MUTEX_DESTROY(&nm->run_mutex);
+    
     socku_close(nm->ctl_fd, nm->ctl_sock_path);
     socku_close(nm->priv_fd, nm->priv_sock_path);
+    
     if (nm->pid_file[0] != 0) {
 	(void) unlink(nm->pid_file);
     }
+
+    api_rest_free(nm->api);
     db_free(NULL);
     log_free();
     xfree(nm);
@@ -153,6 +159,15 @@ nm_prepare(void)
 	}
     }
 
+    if ((nm->options & OPT_DISABLE_API_REST)) {
+	api_rest_free(nm->api);
+	nm->api = NULL;
+    } else {
+	if (api_rest_create_server(nm->api) < 0) {
+	    fatal("Fail to create HTTP server.\n");
+	}
+    }
+
     if (THREAD_START(&nm->ctl_th, &nm_ctl_thread, nm) < 0) {
 	fatal("Start control thread fail.\n");
     }
@@ -183,6 +198,11 @@ nm_signal_conf(void (*sig_handler)(int))
     act.sa_flags = 0;
     
     if (sigaction (SIGINT, &act, NULL) < 0) {
+        fatal("sigaction: %s\n", STRERRNO);
+    }
+
+    act.sa_handler = SIG_IGN;
+    if (sigaction (SIGPIPE, &act, NULL) < 0) {
         fatal("sigaction: %s\n", STRERRNO);
     }
 }
@@ -415,43 +435,107 @@ static void
 nm_client(void)
 {
     int ret;
-    int buf;
+    int fd;
+    int cli_fd;
     fd_set fds;
     struct timeval tv;
 
     FD_ZERO(&fds);
     FD_SET(nm->ctl_fd, &fds);
     FD_SET(nm->priv_fd, &fds);
+    if (nm->api != NULL) {
+	FD_SET(nm->api->srv_fd, &fds);
+    }
 
     tv.tv_sec = 1;
     tv.tv_usec = 0;
 
-    buf = nm->ctl_fd;
-    if (nm->priv_fd > nm->ctl_fd) {
-	buf = nm->priv_fd;
+    fd = nm->ctl_fd;
+    if (nm->priv_fd > fd) {
+	fd = nm->priv_fd;
+    }
+    if (nm->api != NULL) {
+	if (nm->api->srv_fd > fd) {
+	    fd = nm->api->srv_fd;
+	}
     }
 
-    ret = select(buf+1, &fds, NULL, NULL, &tv);
+    ret = select(fd+1, &fds, NULL, NULL, &tv);
     if (ret < 1) {
 	if (ret < 0) {
 	    err("select: %s\n", STRERRNO);
 	}
+	DEBUG("select return: %d\n", ret);
 	return;
     }
 
+    cli_fd = -1;
     if (FD_ISSET(nm->ctl_fd, &fds)) {
-	buf = nm_accept_client(nm->ctl_fd);
-	if (buf != -1) {
-	    cmd_handler(buf);
+	cli_fd = nm_accept_client(nm->ctl_fd, SOCK_TYPE_UNIX);
+	if (cli_fd != -1) {
+	    cmd_handler(cli_fd);
 	}
     } else if (FD_ISSET(nm->priv_fd, &fds)) {
-	buf = nm_accept_client(nm->priv_fd);
-	if (buf != -1) {
-	   nm_update_host_state(buf);
+	cli_fd = nm_accept_client(nm->priv_fd, SOCK_TYPE_UNIX);
+	if (cli_fd != -1) {
+	   nm_update_host_state(cli_fd);
+	}
+    } else {
+	if (nm->api != NULL) {
+	    if (FD_ISSET(nm->api->srv_fd, &fds)) {
+		cli_fd = nm_accept_client(nm->api->srv_fd, SOCK_TYPE_TCP);
+		if (cli_fd != -1) {
+		    nm_api_rest_cmd(cli_fd);
+		}
+	    }
 	}
     }
 
-    (void) xclose(buf);
+    (void) xclose(cli_fd);
+}
+
+static int
+nm_accept_client(int fd, int sock_type)
+{
+    int fdcli;
+    socklen_t len;
+    void *client;
+    struct sockaddr_un ucli;
+    struct sockaddr_storage scli; 
+
+    if (sock_type == SOCK_TYPE_UNIX) {
+	client = &ucli;
+	len = sizeof(struct sockaddr_un);	
+    } else {
+	client = &scli;
+	len = sizeof(struct sockaddr_storage);	
+    }
+
+    fdcli = accept(fd, (struct sockaddr *)client, &len);
+    if (fdcli < 0) {
+	err("accept socket type %s: %s\n",
+	    (sock_type == SOCK_TYPE_UNIX) ? "unix" : "tcp",
+	    STRERRNO);
+	return -1;
+    }
+    
+    return fdcli;
+}
+
+static void
+nm_api_rest_cmd(int cli_fd)
+{
+    struct http_header http;
+
+    memset(&http, 0, sizeof(http));
+    sbuf_init(&http.header);
+    if (api_rest_read(nm->api, cli_fd, &http) < 0) {
+	return;
+    }
+
+    
+
+    http_header_free_data(&http);
 }
 
 static void
@@ -515,22 +599,6 @@ nm_process_suspend_check_duration(struct nm_process *process,
 	nm_process_suspend_free(&nm->suspend);
     }
     return 0;
-}
-
-static int
-nm_accept_client(int fd)
-{
-    int fdcli;
-    socklen_t len;
-    struct sockaddr_un cli;
-
-    len = sizeof(struct sockaddr_un);
-    fdcli = accept(fd, (struct sockaddr *)&cli, &len);
-    if (fdcli < 0) {
-	err("socku_accept: %s\n", STRERRNO);
-	return -1;
-    }
-    return fdcli;
 }
 
 static void
@@ -811,6 +879,8 @@ nm_monit_http(struct host *host)
     if (ret < 1) {
 	return (int) ret;
     }
+    buf[ret] = 0;
+    
     DEBUG("host:%s HTTP received %d bytes: \n%s---End---\n",
 	  host->sock.straddr, ret, buf);
 

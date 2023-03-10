@@ -62,7 +62,7 @@ json_get_var_opts(cJSON *monitor, struct json_var *var, unsigned int options)
     } else {
 	if (!cJSON_IsString(item)) {
 	    snprintf(var->err, JSON_VAR_ERR_SIZE,
-		     "JSON <%s> missing invalid type.\n", var->name);
+		     "JSON <%s> invalid type.\n", var->name);
 	    return -1;
 	}
 
