@@ -31,11 +31,6 @@
 #include "../lib/json_utils.h"
 #include "../lib/nm_common.h"
 
-#ifndef CMD_SIZE
-# define CMD_SIZE 2048
-#endif /* !CMD_SIZE */
-
-static int cmd_read(struct cmd *cmd);
 static int cmd_parse(const char *buffer, struct cmd *cmd);
 static int cmd_exec(struct cmd *cmd);
 static int cmd_monit_type_port(struct cmd *cmd);
@@ -55,72 +50,66 @@ static void cmd_reply_add_host(struct cmd *cmd, struct host *host);
 static void cmd_build_err_msg(struct cmd *cmd);
 
 void
-cmd_handler(int fdcli)
+cmd_init(struct cmd *cmd)
 {
-    int ret;
-    struct cmd cmd;
-
-    memset(&cmd, 0, sizeof(cmd));
-    sbuf_init(&cmd.reply);
-    cmd.sockcli = fdcli;
-    cmd.host = host_init_ptr();
-
-    ret = cmd_read(&cmd);
-    if (ret == 0) {
-	ret = cmd_exec(&cmd);
-    }
-
-    if (ret < 0 && cmd.error == NULL) {
-	cmd.error = dump_err(NM_ERR_UNKNOW);
-    }
-
-    if (cmd.error != NULL) {
-	cmd_build_err_msg(&cmd);
-    } else {
-	/* Always in reply */
-	sbuf_vadd(&cmd.reply, JSON_SET_INT("status", 0));
-	sbuf_vadd(&cmd.reply, JSON_SET_INT("command", cmd.type));
-    }
-
-    sbuf_add_to_offset(&cmd.reply, 0, JSON_OPEN);
-    json_close(&cmd.reply, JSON_CLOSE);
-    DEBUG("Send: %s\n", cmd.reply.buf);
-    (void) sock_write_fd(fdcli, cmd.reply.buf, sbuf_len(&cmd.reply));
-
-    if (cmd.type != CMD_ADD || cmd.error != NULL) {
-	xfree(cmd.host->http);
-	xfree(cmd.host);
-    }
-    
-    xfree(cmd.error);
-    sbuf_free(&cmd.reply);
-    cJSON_Delete(cmd.monitor);
+    memset(cmd, 0, sizeof(struct cmd));
+    sbuf_init(&cmd->reply);
+    cmd->host = host_init_ptr();
 }
 
-static int
-cmd_read(struct cmd *cmd)
+void
+cmd_free_after_exec(struct cmd *cmd)
 {
-    ssize_t ret;
-    char buffer[CMD_SIZE];
-
-    memset(buffer, 0, CMD_SIZE);
-    ret = sock_read_fd(cmd->sockcli, buffer, CMD_SIZE, 2);
-    if (ret == SOCK_RET_TIMEOUT) {
-        cmd->error = dump_err(NM_ERR_TIMEOUT);
+    if (cmd->type != CMD_ADD || cmd->error != NULL) {
+	host_free(cmd->host);
     }
-    if (ret < 1) {
+    xfree(cmd->error);
+    sbuf_free(&cmd->reply);
+    cJSON_Delete(cmd->monitor);
+}
+
+void
+cmd_free_all_data(struct cmd *cmd)
+{
+    xfree(cmd->error);
+    sbuf_free(&cmd->reply);
+    host_free(cmd->host);
+    cJSON_Delete(cmd->monitor);
+}
+
+int
+cmd_handler(const char *json, struct cmd *cmd)
+{
+    int ret;
+    
+    if (cmd_parse(json, cmd) < 0) {
 	return -1;
     }
 
-    DEBUG("Command recieved: %s\n", buffer);
-    return cmd_parse(buffer, cmd);
+    ret = cmd_exec(cmd);
+    if (ret < 0 && cmd->error == NULL) {
+	cmd->error = dump_err(NM_ERR_UNKNOW);
+    }
+
+    if (cmd->error != NULL) {
+	cmd_build_err_msg(cmd);
+    } else {
+	/* Always in reply */
+	sbuf_vadd(&cmd->reply, JSON_SET_INT("status", 0)); 
+	sbuf_vadd(&cmd->reply, JSON_SET_INT("command", cmd->type));
+    }
+    
+    sbuf_add_to_offset(&cmd->reply, 0, JSON_OPEN);
+    json_close(&cmd->reply, JSON_CLOSE);
+    return 0;
 }
 
 static int
 cmd_parse(const char *buffer, struct cmd *cmd)
 {
     struct json_var jvar = JSON_INIT_NBR("command", &cmd->type);
-    
+
+    DEBUG("Parse JSON command:\n%s\n", buffer);
     cmd->monitor = cJSON_Parse(buffer);
     if (cmd->monitor == NULL) {
 	cmd->error = dump_err("%s", cJSON_GetErrorPtr2());
@@ -431,9 +420,11 @@ cmd_change_state(struct cmd *cmd, int new_state)
 int
 cmd_host_list(struct cmd *cmd)
 {
+    int nhosts;
     struct host *host = NULL;
     struct nm_process *monitoring = NULL;
-    
+
+    nhosts = 0;
     if (cmd->host->uuid[0] != 0) {
 	host = host_get_by_uuid(cmd->host->uuid);
 	if (host == NULL) {
@@ -442,16 +433,20 @@ cmd_host_list(struct cmd *cmd)
 	}
 	cmd_reply_add_host(cmd, host);
 	cmd_reply_add_host_state(cmd, host);
+	nhosts++;
     } else {
 	sbuf_add(&cmd->reply, "\"hosts\":"JSON_ARRAY_OPEN);
 	LIST_FOREACH(nm->monitoring, monitoring) {
 	    host = monitoring->data;
 	    cmd_host_to_json(cmd, host);
 	    sbuf_add(&cmd->reply, ",");
+	    nhosts++;
 	}
 	json_close(&cmd->reply, JSON_ARRAY_CLOSE);
 	sbuf_add(&cmd->reply, ",");
     }
+
+    sbuf_vadd(&cmd->reply, JSON_SET_INT("nhosts", nhosts));
     return 0;
 }
 
@@ -544,7 +539,7 @@ cmd_reply_add_monit_type(struct cmd *cmd, struct host *host)
 	sbuf_vadd(str, JSON_SET_STR("http_version", host->http->version));
 	sbuf_vadd(str, JSON_SET_STR("http_user_agent", host->http->user_agent));
 	
-	if (host->http->auth_type != NULL) {
+	if (host->http->auth_type[0] != 0) {
 	    sbuf_vadd(str, JSON_SET_STR("http_auth_type",
 					host->http->auth_type));
 	}
@@ -566,13 +561,4 @@ cmd_build_err_msg(struct cmd *cmd)
     }
     sbuf_vadd(&cmd->reply, JSON_SET_STR("error", cmd->error));
     sbuf_vadd(&cmd->reply, JSON_SET_INT("status", -1));
-}
-
-void
-cmd_free_data(struct cmd *cmd)
-{
-    xfree(cmd->error);
-    sbuf_free(&cmd->reply);
-    host_free(cmd->host);
-    cJSON_Delete(cmd->monitor);
 }

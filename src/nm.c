@@ -31,6 +31,7 @@
 #include "misc.h"
 #include "host.h"
 #include "db.h"
+#include "nm_prepare.h"
 
 #include "../lib/log.h"
 #include "../lib/mem.h"
@@ -54,13 +55,7 @@ struct nm_script_arg {
     char str_time[24];
 };
 
-static void nm_signal_conf(void (*sig_handler)(int));
-static void nm_signal_handler(int signum ATTR_UNUSED);
-static int nm_process_run_all(struct nm_process *process,
-			      int (*func_ptr)(void*));
-static int nm_process_kill_all(struct nm_process *process);
 static int nm_process_kill_all_and_free(struct nm_process *root);
-static void * nm_ctl_thread(void *arg ATTR_UNUSED);
 static void nm_client(void);
 static void nm_process_script(void);
 static void nm_process_suspend(void);
@@ -68,7 +63,7 @@ static int nm_process_suspend_check_duration(struct nm_process *process,
 					     struct nm_process_suspend **suspend,
 					     unsigned int options);
 static int nm_accept_client(int fd, int sock_type);
-static void nm_api_rest_cmd(int cli_fd);
+static void nm_socku_cmd(int cli_fd);
 static void nm_update_host_state(int fdcli);
 static int nm_script_exec(void *arg);
 static void nm_terminate_threads(void);
@@ -121,60 +116,29 @@ nm_free(void)
 }
 
 void
-nm_prepare(void)
+nm_sig_interrupt_handler(int signum ATTR_UNUSED)
 {
-    nm_signal_conf(&nm_signal_handler);
-    
-    nm->ctl_fd = socku_server_create(nm->ctl_sock_path);
-    if (nm->ctl_fd < 0) {
-	fatal("Fail to create control socket server.\n");
-    }
-    
-    nm->priv_fd = socku_server_create(nm->priv_sock_path);
-    if (nm->priv_fd < 0) {
-	fatal("Fail to create priv socket server.\n");
-    }
+    DEBUG("SIGINT catched, set run to false.\n");
+    MUTEX_LOCK(&nm->run_mutex);
+    nm->run = 0;
+    MUTEX_UNLOCK(&nm->run_mutex);
+}
 
-    db_init(nm->db_type);
-    if (db_test_connection(nm->hosts_path) < 0) {
-	fatal("Cannot access to database.\n");
-    }
+void *
+nm_ctl_thread(void *arg ATTR_UNUSED)
+{
+    DEBUG("Main loop started...\n");
     
-    if ((nm->options & OPT_NO_DB) == 0) {
-	if (nm->hosts_path[0] != 0) {
-	    if (db_host_load(nm->hosts_path) < 0) {
-		fatal("Fail to load host.\n");
-		exit(-1);
-	    }
-	}
-	if (nm_process_run_all(nm->monitoring, &nm_host_monitoring) < 0) {
-	    nm_process_kill_all(nm->monitoring);
-	    exit(-1);
-	}
+    while (1) {
+	nm_client();
+	nm_process_script();
+	nm_process_suspend();
     }
-    
-    if (nm->script_path[0] != 0) {
-	if (access(nm->script_path, X_OK) < 0) {
-	    fatal("Script <%s> error: %s\n", nm->script_path, STRERRNO);
-	}
-    }
-
-    if ((nm->options & OPT_DISABLE_API_REST)) {
-	api_rest_free(nm->api);
-	nm->api = NULL;
-    } else {
-	if (api_rest_create_server(nm->api) < 0) {
-	    fatal("Fail to create HTTP server.\n");
-	}
-    }
-
-    if (THREAD_START(&nm->ctl_th, &nm_ctl_thread, nm) < 0) {
-	fatal("Start control thread fail.\n");
-    }
+    pthread_exit(NULL);
 }
 
 int
-nm_run(void)
+nm_main_loop(void)
 {
     int cont;
     
@@ -188,35 +152,7 @@ nm_run(void)
     return 0;
 }
 
-static void
-nm_signal_conf(void (*sig_handler)(int))
-{
-    struct sigaction act;
-
-    act.sa_handler = sig_handler;
-    sigemptyset(&act.sa_mask);
-    act.sa_flags = 0;
-    
-    if (sigaction (SIGINT, &act, NULL) < 0) {
-        fatal("sigaction: %s\n", STRERRNO);
-    }
-
-    act.sa_handler = SIG_IGN;
-    if (sigaction (SIGPIPE, &act, NULL) < 0) {
-        fatal("sigaction: %s\n", STRERRNO);
-    }
-}
-
-static void
-nm_signal_handler(int signum ATTR_UNUSED)
-{
-    DEBUG("SIGINT catched, set run to false.\n");
-    MUTEX_LOCK(&nm->run_mutex);
-    nm->run = 0;
-    MUTEX_UNLOCK(&nm->run_mutex);
-}
-
-static int
+int
 nm_process_run_all(struct nm_process *process, int (*func_ptr)(void*))
 {
     struct nm_process *ptr = NULL;
@@ -268,7 +204,7 @@ nm_process_kill_all_and_free(struct nm_process *root)
     return 0;
 }
 
-static int
+int
 nm_process_kill_all(struct nm_process *process)
 {
     int ret;
@@ -337,11 +273,12 @@ nm_process_wait(struct nm_process *process, int options)
     if (ret == 0) {
 	return 0;
     }
-
     if (WIFEXITED(status)) {
 	info("PID: %d terminated with code: %d\n", ret, WEXITSTATUS(status));
     } else if (WIFSIGNALED(status)) {
 	info("PID: %d terminated by signal number %d\n", ret, WTERMSIG(status));
+    } else {
+	info("PID: %d terminated.n", ret);
     }
     
     process->pid = 0;
@@ -415,20 +352,8 @@ nm_process_free(struct nm_process *process)
 	process->free_data(process->data);
 	process->free_data = NULL;
     }
+    xfree(process->suspend);
     xfree(process);
-}
-
-static void *
-nm_ctl_thread(void *arg ATTR_UNUSED)
-{
-    DEBUG("Main loop started...\n");
-    
-    while (1) {
-	nm_client();
-	nm_process_script();
-	nm_process_suspend();
-    }
-    pthread_exit(NULL);
 }
 
 static void
@@ -473,7 +398,7 @@ nm_client(void)
     if (FD_ISSET(nm->ctl_fd, &fds)) {
 	cli_fd = nm_accept_client(nm->ctl_fd, SOCK_TYPE_UNIX);
 	if (cli_fd != -1) {
-	    cmd_handler(cli_fd);
+	    nm_socku_cmd(cli_fd);
 	}
     } else if (FD_ISSET(nm->priv_fd, &fds)) {
 	cli_fd = nm_accept_client(nm->priv_fd, SOCK_TYPE_UNIX);
@@ -485,7 +410,7 @@ nm_client(void)
 	    if (FD_ISSET(nm->api->srv_fd, &fds)) {
 		cli_fd = nm_accept_client(nm->api->srv_fd, SOCK_TYPE_TCP);
 		if (cli_fd != -1) {
-		    nm_api_rest_cmd(cli_fd);
+		    (void) api_rest_client_handler(nm->api, cli_fd);
 		}
 	    }
 	}
@@ -523,24 +448,38 @@ nm_accept_client(int fd, int sock_type)
 }
 
 static void
-nm_api_rest_cmd(int cli_fd)
+nm_socku_cmd(int cli_fd)
 {
-    struct http_header http;
+    ssize_t ret;
+    char buffer[CMD_SIZE];
+    struct cmd cmd;
 
-    memset(&http, 0, sizeof(http));
-    sbuf_init(&http.header);
-    if (api_rest_read(nm->api, cli_fd, &http) < 0) {
+    cmd_init(&cmd);
+    memset(buffer, 0, CMD_SIZE);
+    ret = sock_read_fd(cli_fd, buffer, CMD_SIZE, 2);
+    if (ret == SOCK_RET_TIMEOUT) {
+        cmd.error = dump_err(NM_ERR_TIMEOUT);
+    }
+    
+    if (cmd.error != NULL) {
+	cmd_free_all_data(&cmd);
 	return;
     }
-
     
-
-    http_header_free_data(&http);
+    (void) cmd_handler(buffer, &cmd);
+    if (sbuf_len(&cmd.reply) > 0) {
+	DEBUG("Send: %s\n", cmd.reply.buf);
+	(void) sock_write_fd(cli_fd, cmd.reply.buf, sbuf_len(&cmd.reply));
+    }
+    
+    cmd_free_after_exec(&cmd);
+    return;
 }
 
 static void
 nm_process_script(void)
 {
+    pid_t pid;
     struct nm_process *script = NULL;
     struct nm_process *nextptr = NULL;
 
@@ -549,8 +488,9 @@ nm_process_script(void)
     }
 
     for (script = nm->script; script; script = nextptr) {
+	pid = script->pid;
 	nextptr = script->next;
-	if (nm_process_wait(script, NM_PROCESS_WAIT_NONBLOCK) == script->pid) {
+	if (nm_process_wait(script, NM_PROCESS_WAIT_NONBLOCK) == pid) {
 	    DLIST_UNLINK(nm->script, script);
 	    nm_process_free(script);
 	}
@@ -963,25 +903,25 @@ nm_reload_hosts(const char *path)
 int
 nm_add_host_by_json(cJSON *json)
 {
-    struct host *host = NULL;
     struct cmd cmd;
 
-    host = host_init_ptr();
-    if (host_parse_json(host, json) < 0) {
-	xfree(host);
+    memset(&cmd, 0, sizeof(struct cmd));
+    cmd.host = host_init_ptr();
+    if (host_parse_json(cmd.host, json) < 0) {
+	host_free(cmd.host);
 	return -1;
     }
 
-    memset(&cmd, 0, sizeof(struct cmd));
     cmd.type_init = 1;
-    cmd.host = host;
+    cmd.type = CMD_ADD;
     sbuf_init(&cmd.reply);
     if (cmd_check_host_fields(&cmd) < 0) {
 	err("parse host: %s", cmd.error);
-	cmd_free_data(&cmd);
+	cmd_free_all_data(&cmd);
 	return -1;
     }
     
-    (void) host_link(host);
+    (void) host_link(cmd.host);
+    cmd_free_after_exec(&cmd);
     return 0;
 }

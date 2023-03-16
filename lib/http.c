@@ -35,6 +35,17 @@ static int http_copy_next_part(const char *src, char *dst,
 			       int max_size, int option);
 static int http_get_next_part_size(const char *src, int max_size, int option);
 
+static const char *days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+static const char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
+			"Aug", "Sep", "Oct", "Nov", "Dec"};
+
+void
+http_header_init(struct http_header *http)
+{
+    memset(http, 0, sizeof(struct http_header));
+    sbuf_init(&http->header);
+}
+
 void
 http_header_free(struct http_header *http)
 {
@@ -331,4 +342,23 @@ http_delete_header_payload(char *str)
     if (buffer != NULL) {
 	*buffer = 0;
     }
+}
+
+const char *
+http_get_date(time_t timestamp, char *date)
+{
+    struct tm *tm = NULL;
+
+    memset(date, 0, HTTP_DATE_SIZE);
+    tm = gmtime(&timestamp);
+    if (tm != NULL) {
+	snprintf(date, (HTTP_DATE_SIZE-1),
+		 "%s, %d %s %d %02d:%02d:%02d GMT",
+		 days[tm->tm_wday], tm->tm_mday, months[tm->tm_mon],
+		 tm->tm_year + 1900, tm->tm_hour, tm->tm_min, tm->tm_sec);
+    }
+    if (date[0] == 0) {
+        strncpy(date, "[get_date_error]", HTTP_DATE_SIZE);
+    }
+    return date;
 }

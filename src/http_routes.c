@@ -17,9 +17,26 @@
  *  along with tnm. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NM_VERSION_H
-#define NM_VERSION_H
+#include "http_routes.h"
+#include "command.h"
 
-#define VERSION "0.3.0"
+#include "../lib/attr.h"
+#include "../lib/api_rest.h"
+#include "../lib/sock.h"
 
-#endif /* !NM_VERSION_H */
+int
+http_route_host_manage(struct api_rest_ctx *ctx, void *arg ATTR_UNUSED)
+{
+    int ret;
+    struct cmd cmd;
+
+    cmd_init(&cmd);
+    ret = cmd_handler(ctx->in.payload, &cmd);
+    sbuf_add(&ctx->out, cmd.reply.buf);
+    if (ret == -1) {
+	cmd_free_all_data(&cmd);
+    } else {
+	cmd_free_after_exec(&cmd);
+    }
+    return 0;
+}

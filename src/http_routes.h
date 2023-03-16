@@ -17,9 +17,15 @@
  *  along with tnm. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NM_VERSION_H
-#define NM_VERSION_H
+#ifndef NM_HTTP_ROUTES_H
+#define NM_HTTP_ROUTES_H
 
-#define VERSION "0.3.0"
+#include "../lib/api_rest.h"
 
-#endif /* !NM_VERSION_H */
+/* To easely change the prototype of handlers */
+#define DECLARE_HTTP_ROUTE(name) \
+    int http_route_##name(struct api_rest_ctx *s, void *arg)
+
+DECLARE_HTTP_ROUTE(host_manage);
+
+#endif /* !NM_HTTP_ROUTES_H */

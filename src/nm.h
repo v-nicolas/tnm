@@ -92,9 +92,12 @@ struct nm {
 };
 
 void nm_init(const char *pname);
-void nm_prepare(void);
-int nm_run(void);
 void nm_free(void);
+void nm_sig_interrupt_handler(int signum ATTR_UNUSED);
+void * nm_ctl_thread(void *arg ATTR_UNUSED);
+int nm_main_loop(void);
+int nm_process_run_all(struct nm_process *process, int (*func_ptr)(void*));
+int nm_process_kill_all(struct nm_process *process);
 int nm_process_run(struct nm_process *process, int (*func_ptr)(void*));
 int nm_process_kill_and_wait(struct nm_process *process);
 int nm_process_send_sig(pid_t pid, int signum);

@@ -17,9 +17,9 @@
  *  along with tnm. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NM_VERSION_H
-#define NM_VERSION_H
+#ifndef NM_PREPARE_H
+#define NM_PREPARE_H
 
-#define VERSION "0.3.0"
+void nm_prepare(void);
 
-#endif /* !NM_VERSION_H */
+#endif /* !NM_PREPARE_H */

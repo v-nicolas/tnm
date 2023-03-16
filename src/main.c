@@ -25,6 +25,7 @@
 #include "nm.h"
 #include "db.h"
 #include "version.h"
+#include "nm_prepare.h"
 
 #include "../lib/attr.h"
 #include "../lib/log.h"
@@ -60,7 +61,7 @@ enum program_arguments {
 };
 
 const char *progname;
-
+#include "../lib/http.h"
 int
 main(int argc, char **argv)
 {
@@ -71,7 +72,7 @@ main(int argc, char **argv)
     parse_config_file();
     daemonize();
     nm_prepare();
-    ret = nm_run();
+    ret = nm_main_loop();
     nm_free();
     return (ret == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
@@ -180,7 +181,7 @@ parse_program_options(int argc, char **argv)
 	{"http-bearer",	     required_argument, NULL, ARG_HTTP_BEARER},
 	{"http-ipv6-only",   no_argument,       NULL, ARG_HTTP_IPV6_ONLY},
 	{"http-ipv4-only",   no_argument,       NULL, ARG_HTTP_IPV4_ONLY},
-	{"disablE-api-rest", no_argument,       NULL, ARG_HTTP_DISABLE_API_REST},
+	{"disable-api-rest", no_argument,       NULL, ARG_HTTP_DISABLE_API_REST},
 	{"db_uri",           required_argument, NULL, 'U'},
 	{"db_file",          required_argument, NULL, 'F'},
 	{"script",           required_argument, NULL, 's'},
@@ -351,6 +352,7 @@ usage(void)
 	   " only IPv4 (by default use v4 and v6).\n"
 	   "      --http-ipv6-only  : If bind address not set, HTTP server use"
 	   " only IPv6 (by default use v4 and v6).\n"
+	   "      --disable-api-rest: Disable API REST server.\n"
 	   "at the API REST.\n"
 	   "  -E, --log-file-err    : Log error in specifics file (default stderr).\n"
 	   "  -I, --log-file-info   : Log information in specifics file (default stdout).\n",

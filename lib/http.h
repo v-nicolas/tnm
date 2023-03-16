@@ -20,9 +20,12 @@
 #ifndef NM_HTTP_H
 #define NM_HTTP_H
 
+#include <time.h>
 #include <string.h>
 
 #include "sbuf.h"
+
+#define HTTP_DATE_SIZE 64
 
 #define HTTP_AUTH_BASIC  "Basic"
 #define HTTP_AUTH_BEARER "Bearer"
@@ -41,6 +44,8 @@
 #define HTTP_POST    "POST"
 #define HTTP_DELETE  "DELETE"
 #define HTTP_PATCH   "PATCH"
+
+#define HTTP_BEARER_STR "Bearer"
 
 #define HTTP_USER_AGENT_DEFAULT "Default-http-lib-agent"
 
@@ -88,6 +93,7 @@ static inline int http_check_version(const char *s) {
 	     !strcmp(s, HTTP_VERSION_3))) ? 0 : -1;
 }
 
+void http_header_init(struct http_header *http);
 void http_header_free(struct http_header *http);
 void http_header_free_data(struct http_header *http);
 void http_make_header(struct http_header *http, const char *host, const char *ip);
@@ -98,5 +104,6 @@ char *http_get_payload(const char *str);
 int http_get_authorization(const char *str, char *auth_type, char **value);
 int http_get_route(const char *str);
 void http_delete_header_payload(char *str);
+const char * http_get_date(time_t timestamp, char *date);
 
 #endif /* !NM_HTTP_H */

@@ -3,30 +3,23 @@
 nc -l 1234 &
 NC_PID=$!
 
+for I in {1..1}; do
+    echo i = $I
 ./tnmctl --add \
-         --hostname localhost --port 1234 \
+         --hostname localhost --port 80 \
          --monit http --http-method GET --http-path "/" \
-         --timeout 5 --frequency 15 \
-         --uuid a185c2c0-3333-3333-3333-9c3494211111
+         --timeout 5 --frequency 15
+done
 
-sleep 3
-
-./tnmctl -l | jq
-
-echo "Kill nc and delete uuid ..."
-kill -9 $NC_PID
-./tnmctl -r --uuid a185c2c0-3333-3333-3333-9c3494211111
-
-sleep 1
-
-./tnmctl -l | jq
-
+sleep 2
 
 curl -X POST 127.0.0.1:8000/host \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer toto" \
      -d '{"command": 1,"monitoring_type": 2,"timeout": 5,"frequency": 15,"port": 1234,"hostname": "localhost","uuid": "a185c2c0-3333-3333-3333-9c3494211111","http_method": "GET","http_path": "/"}' | jq
 
+echo "Kill nc and delete uuid ..."
+kill -9 $NC_PID
 
 curl -X DELETE 127.0.0.1:8000/host \
      -H "Content-Type: application/json" \

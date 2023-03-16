@@ -37,6 +37,7 @@ struct database {
     int (*free)(void *);
 };
 
+void db_disable(void);
 void db_init(int db_type);
 int db_test_connection(void *arg);
 int db_host_add(void *arg);
