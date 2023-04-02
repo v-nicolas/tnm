@@ -17,6 +17,7 @@
  *  along with tnm. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -268,7 +269,13 @@ nm_process_wait(struct nm_process *process, int options)
     ret = waitpid(process->pid, &status, options);
     if (ret < 0) {
 	err("wait pid %d: %s\n", process->pid, STRERRNO);
-	return -1;
+	if (ret == ECHILD) {
+	    /* To remove it from the process list*/
+	    ret = process->pid;
+	    process->pid = 0;
+	    process->state = NM_PROCESS_KILL;
+	}
+	return ret;
     }
     if (ret == 0) {
 	return 0;
@@ -278,7 +285,7 @@ nm_process_wait(struct nm_process *process, int options)
     } else if (WIFSIGNALED(status)) {
 	info("PID: %d terminated by signal number %d\n", ret, WTERMSIG(status));
     } else {
-	info("PID: %d terminated.n", ret);
+	info("PID: %d terminated.\n", ret);
     }
     
     process->pid = 0;
