@@ -23,20 +23,23 @@
 #include "../lib/attr.h"
 #include "../lib/api_rest.h"
 #include "../lib/sock.h"
+#include "../lib/http.h"
 
 int
-http_route_host_manage(struct api_rest_ctx *ctx, void *arg ATTR_UNUSED)
+http_route_host_manage(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
 {
     int ret;
     struct cmd cmd;
 
     cmd_init(&cmd);
     ret = cmd_handler(ctx->in.payload, &cmd);
-    sbuf_add(&ctx->out, cmd.reply.buf);
-    if (ret == -1) {
-	cmd_free_all_data(&cmd);
-    } else {
+    if (ret != -1) {
+	api_rest_ret(ctx, HTTP_STATUS_OK, cmd.reply.buf);
 	cmd_free_after_exec(&cmd);
+    } else {
+	api_rest_ret(ctx, HTTP_STATUS_INTERNAL_ERROR, cmd.reply.buf);
+	cmd_free_all_data(&cmd);
     }
+
     return 0;
 }

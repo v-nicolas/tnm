@@ -37,12 +37,12 @@ enum api_rest_route_option {
 };
 
 
-struct api_rest_ctx {
+struct api_rest_req_ctx {
     struct http_header in;
-    struct sbuf out;
+    struct http_header out;
 };
 
-typedef int (*api_rest_handler_t)(struct api_rest_ctx *, void *);
+typedef int (*api_rest_handler_t)(struct api_rest_req_ctx *, void *);
 struct api_rest {
     int srv_fd;
     int srv_ip_version;
@@ -90,5 +90,7 @@ int api_rest_add_route_delete(struct api_rest *api, const char *path,
 int api_rest_client_handler(struct api_rest *api, int cli_fd);
 int api_rest_parse_request(struct http_header *http);
 int api_rest_read(struct api_rest *api, int cli_fd, struct http_header *http);
+void api_rest_ret(struct api_rest_req_ctx *ctx,
+		  int status_code, const char *payload);
 
 #endif /* !API_REST_H */

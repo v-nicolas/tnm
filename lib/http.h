@@ -53,13 +53,22 @@
 #define HTTP_CONTENT_LEN_STR	"Content-Length"
 #define HTTP_AUTHORIZATION_STR	"Authorization:"
 
+#define HTTP_RESPONSE_FIRSTLINE_SIZE 128
 #define HTTP_STATUS_CODE_SIZE 5
 #define HTTP_PATH_SIZE 2048
 #define HTTP_USER_AGENT_SIZE 255
 #define HTTP_CONTENT_TYPE_SIZE 64
 #define HTTP_AUTHORIZATION_SIZE 255
 
+#define HTTP_STATUS_OK 200
+#define HTTP_STATUS_BAD_REQUEST 400
+#define HTTP_STATUS_NOT_FOUND 404
+#define HTTP_STATUS_ACCESS_FORBIDDEN 403
+#define HTTP_STATUS_INTERNAL_ERROR 501
+
 struct http_header {
+    int status_code;
+    
     /* Basic, Bearer ... */
     char *auth_value;
     char *payload;

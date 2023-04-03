@@ -24,7 +24,7 @@
 
 /* To easely change the prototype of handlers */
 #define DECLARE_HTTP_ROUTE(name) \
-    int http_route_##name(struct api_rest_ctx *s, void *arg)
+    int http_route_##name(struct api_rest_req_ctx *s, void *arg)
 
 DECLARE_HTTP_ROUTE(host_manage);
 

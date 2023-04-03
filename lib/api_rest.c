@@ -43,16 +43,18 @@ static int api_rest_add_route(struct api_rest *api,
 			      const char *path,
 			      api_rest_handler_t handler,
 			      void *handler_argument);
+static void api_rest_req_ctx_free(struct api_rest_req_ctx *ctx);
+static void api_rest_build_response(struct api_rest_req_ctx *ctx);
 static int api_rest_router(struct api_rest *api,
-			   struct api_rest_ctx *ctx, int cli_fd);
+			   struct api_rest_req_ctx *ctx, int cli_fd);
 static int api_rest_route_check_auth(struct api_rest *api,
 				     struct http_header *in);
 static struct api_rest_route * api_rest_get_route(struct api_rest_route *route,
 						  const char *path,
 						  const char *method);
-static int api_rest_route_not_found(struct api_rest_ctx *ctx, void *arg);
-static int api_rest_route_access_forbidden(struct api_rest_ctx *ctx, void *arg);
-static int api_rest_route_internal_error(struct api_rest_ctx *ctx, void *arg);
+static int api_rest_route_not_found(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_route_access_forbidden(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_route_internal_error(struct api_rest_req_ctx *ctx, void *arg);
     
 struct api_rest *
 api_rest_new(void)
@@ -219,46 +221,96 @@ api_rest_add_route(struct api_rest *api,
     return 0;
 }
 
+/* return the response http status code */
 int
 api_rest_client_handler(struct api_rest *api, int cli_fd)
 {
-    int ret;
-    struct api_rest_ctx ctx;
+    int status_code;
+    struct api_rest_req_ctx ctx;
 
-    sbuf_init(&ctx.out);
     http_header_init(&ctx.in);
+    http_header_init(&ctx.out);
 
-    ret = api_rest_router(api, &ctx, cli_fd);
-    if (sbuf_len(&ctx.out) > 0) {
-	(void) sock_write_fd(cli_fd, ctx.out.buf, ctx.out.offset);
+    status_code = api_rest_router(api, &ctx, cli_fd);
+    api_rest_build_response(&ctx);
+    if (sbuf_len(&ctx.out.header) > 0) {
+	(void) sock_write_fd(cli_fd, ctx.out.header.buf, ctx.out.header.offset);
     }
     
-    sbuf_free(&ctx.out);
-    http_header_free_data(&ctx.in);
-    return ret;
+    api_rest_req_ctx_free(&ctx);
+    return status_code;
 }
 
+static void
+api_rest_req_ctx_free(struct api_rest_req_ctx *ctx)
+{
+    http_header_free_data(&ctx->in);
+    http_header_free_data(&ctx->out);
+}
+
+static void
+api_rest_build_response(struct api_rest_req_ctx *ctx)
+{
+    const char *firstlinestr = NULL;
+    char date[HTTP_DATE_SIZE];
+
+    switch (ctx->out.status_code) {
+    case 200:
+	firstlinestr = "OK";
+	break;
+    case 400:
+	firstlinestr = "Bad request";
+	break;
+    case 403:
+	firstlinestr = "Access forbidden";
+	break;
+    case 404:
+	firstlinestr = "Not found";
+	break;
+    case 501:
+	firstlinestr = "Internal error";
+	break;
+    default:
+	firstlinestr = "";
+	break;
+    }
+    
+    sbuf_vadd(&ctx->out.header, "%s %d %s\r\n"
+	      "Date: %s\r\n"
+	      "Content-Type: application/json; charset=UTF-8\r\n"
+	      "Content-Length: %lu\r\n"
+	      "Connection: Closed\r\n"
+	      "\r\n"
+	      "%s",
+	      HTTP_VERSION_1_1, ctx->out.status_code,
+	      firstlinestr, http_get_date(time(NULL), date),
+	      strlen(ctx->out.payload), ctx->out.payload);
+}
+
+/* return the response http status code */
 static int
-api_rest_router(struct api_rest *api, struct api_rest_ctx *ctx, int cli_fd)
+api_rest_router(struct api_rest *api, struct api_rest_req_ctx *ctx, int cli_fd)
 {
     struct api_rest_route *route = NULL;
     
     if (api_rest_read(api, cli_fd, &ctx->in) < 0) {
-	api->route_internal_error(ctx, NULL);
-	return -1;
+	(void) api->route_internal_error(ctx, NULL);
+	return HTTP_STATUS_INTERNAL_ERROR;
     }
 
     route = api_rest_get_route(api->route, ctx->in.path, ctx->in.method);
     if (route == NULL) {
-	err("API REST: %s %s not found.\n", ctx->in.method, ctx->in.path);
-	api->route_not_found(ctx, NULL);
-	return -1;
+	info("API REST: %s %s not found.\n", ctx->in.method, ctx->in.path);
+	(void) api->route_not_found(ctx, NULL);
+	return HTTP_STATUS_NOT_FOUND;
     }
 
     if ((route->option & API_ROUTE_OPT_PROTECTED)) {
 	if (api_rest_route_check_auth(api, &ctx->in) < 0) {
-	    api->route_access_forbidden(ctx, NULL);
-	    return -1; 
+	    info("API REST: %s %s access forbidden.\n",
+		 ctx->in.method, ctx->in.path);
+	    (void) api->route_access_forbidden(ctx, NULL);
+	    return HTTP_STATUS_ACCESS_FORBIDDEN; 
 	}
     }
     
@@ -273,7 +325,7 @@ api_rest_route_check_auth(struct api_rest *api, struct http_header *in)
 	    in->method, in->path);
 	return -1;
     }
-	
+    
     if (strcmp(in->auth_type, HTTP_BEARER_STR) != 0) {
 	err("API REST: %s %s auth type <%s> invalid.\n",
 	    in->method, in->path, in->auth_value);
@@ -356,9 +408,8 @@ api_rest_get_route(struct api_rest_route *route,
 {
     struct api_rest_route *routeptr = NULL;
 
-    printf("Search route: <%s> -- <%s>\n", method, path);
+    DEBUG("Search route: <%s> -- <%s>\n", method, path);
     LIST_FOREACH (route, routeptr) {
-	printf("<%s> -- <%s>\n", routeptr->method, routeptr->path);
 	if (strcmp(routeptr->path, path) == 0 &&
 	    strcmp(routeptr->method, method) == 0) {
 	    
@@ -369,55 +420,42 @@ api_rest_get_route(struct api_rest_route *route,
 }
 
 static int
-api_rest_route_not_found(struct api_rest_ctx *ctx, void *arg ATTR_UNUSED)
+api_rest_route_not_found(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
 {
-    char date[HTTP_DATE_SIZE];
-    
-    sbuf_vadd(&ctx->out, "%s 404 Not found\r\n"
-	      "Date: %s\r\n"
-	      "Content-Type: application/json; charset=UTF-8\r\n"
-	      "Content-Length: %lu\r\n"
-	      "Connection: Closed\r\n"
-	      "\r\n"
-	      "%s",
-	      HTTP_VERSION_1_1, http_get_date(time(NULL), date),
-	      strlen(API_REST_ERR_NOT_FOUND),
-	      API_REST_ERR_NOT_FOUND);
+    api_rest_ret(ctx, HTTP_STATUS_NOT_FOUND, API_REST_ERR_NOT_FOUND);
     return 0;
 }
 
 static int
-api_rest_route_access_forbidden(struct api_rest_ctx *ctx, void *arg ATTR_UNUSED)
+api_rest_route_access_forbidden(struct api_rest_req_ctx *ctx,
+				void *arg ATTR_UNUSED)
 {
-    char date[HTTP_DATE_SIZE];
-    
-    sbuf_vadd(&ctx->out, "%s 403 Access forbidden\r\n"
-	      "Date: %s\r\n"
-	      "Content-Type: application/json; charset=UTF-8\r\n"
-	      "Content-Length: %lu\r\n"
-	      "Connection: Closed\r\n"
-	      "\r\n"
-	      "%s",
-	      HTTP_VERSION_1_1, http_get_date(time(NULL), date),
-	      strlen(API_REST_ERR_ACCESS_FORBIDDEN),
-	      API_REST_ERR_ACCESS_FORBIDDEN);
+    api_rest_ret(ctx, HTTP_STATUS_ACCESS_FORBIDDEN,
+		 API_REST_ERR_ACCESS_FORBIDDEN);
     return 0;
 }
 
 static int
-api_rest_route_internal_error(struct api_rest_ctx *ctx, void *arg ATTR_UNUSED)
+api_rest_route_internal_error(struct api_rest_req_ctx *ctx,
+			      void *arg ATTR_UNUSED)
 {
-    char date[HTTP_DATE_SIZE];
-    
-    sbuf_vadd(&ctx->out, "%s 501 Internal error\r\n"
-	      "Date: %s\r\n"
-	      "Content-Type: application/json; charset=UTF-8\r\n"
-	      "Content-Length: %lu\r\n"
-	      "Connection: Closed\r\n"
-	      "\r\n"
-	      "%s",
-	      HTTP_VERSION_1_1, http_get_date(time(NULL), date),
-	      strlen(API_REST_ERR_INTERNAL_ERROR),
-	      API_REST_ERR_INTERNAL_ERROR);
+    api_rest_ret(ctx, HTTP_STATUS_INTERNAL_ERROR, API_REST_ERR_INTERNAL_ERROR);
     return 0;
+}
+
+/* ret (return) */
+void
+api_rest_ret(struct api_rest_req_ctx *ctx, int status_code, const char *payload)
+{
+    ctx->out.status_code = status_code;
+    if (payload != NULL && *payload != 0) {
+	if (ctx->out.payload != NULL) {
+	    xfree(ctx->out.payload);
+	}
+	ctx->out.payload = xstrdup(payload);
+    } else {
+	/* put an empty payload to avoid checking if
+	 * payload equal NULL when build the response */
+	ctx->out.payload = xstrdup("");
+    }
 }
