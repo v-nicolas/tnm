@@ -448,10 +448,8 @@ void
 api_rest_ret(struct api_rest_req_ctx *ctx, int status_code, const char *payload)
 {
     ctx->out.status_code = status_code;
+    xfree(ctx->out.payload);
     if (payload != NULL && *payload != 0) {
-	if (ctx->out.payload != NULL) {
-	    xfree(ctx->out.payload);
-	}
 	ctx->out.payload = xstrdup(payload);
     } else {
 	/* put an empty payload to avoid checking if
