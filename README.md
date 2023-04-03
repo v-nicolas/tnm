@@ -5,9 +5,9 @@ TNM is short for **Tiny Network Monitoring**, it is a system that enables you to
 ## Table of Contents
 1. [Compilation](#compilation)
 2. [Dependencies](#dependencies)
+3. [Dial with tnm](#dial-with-tnm)
    1. [APIRest](#apirest)
    2. [Socket unix](#socket-unix)
-3. [Dial with tnm](#dial-with-tnm)
 4. [Database](#database)
    1. [File](#file)
    2. [MongoDB](#mongodb)
