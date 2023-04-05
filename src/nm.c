@@ -413,12 +413,11 @@ nm_client(void)
 	   nm_update_host_state(cli_fd);
 	}
     } else {
+	/* cli_fd not used with api rest */
+	cli_fd = -1;
 	if (nm->api != NULL) {
 	    if (FD_ISSET(nm->api->srv_fd, &fds)) {
-		cli_fd = nm_accept_client(nm->api->srv_fd, SOCK_TYPE_TCP);
-		if (cli_fd != -1) {
-		    (void) api_rest_client_handler(nm->api, cli_fd);
-		}
+	        (void) api_rest_client_handler(nm->api);
 	    }
 	}
     }

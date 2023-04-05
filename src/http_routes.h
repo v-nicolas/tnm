@@ -22,10 +22,6 @@
 
 #include "../lib/api_rest.h"
 
-/* To easely change the prototype of handlers */
-#define DECLARE_HTTP_ROUTE(name) \
-    int http_route_##name(struct api_rest_req_ctx *s, void *arg)
-
 DECLARE_HTTP_ROUTE(host_manage);
 
 #endif /* !NM_HTTP_ROUTES_H */
