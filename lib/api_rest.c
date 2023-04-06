@@ -34,6 +34,7 @@
 
 #define API_REST_ERR(str) "{\"status\": \"error\", \"info\":"#str"}" 
 #define API_REST_ERR_BAD_REQUEST API_REST_ERR("bad request")
+#define API_REST_ERR_UNAUTHORIZED API_REST_ERR("unauthorized")
 #define API_REST_ERR_ACCESS_FORBIDDEN API_REST_ERR("access forbidden")
 #define API_REST_ERR_NOT_FOUND API_REST_ERR("page not found")
 #define API_REST_ERR_REQUEST_TIMEOUT API_REST_ERR("request timeout")
@@ -56,6 +57,7 @@ static struct api_rest_route * api_rest_get_route(struct api_rest_route *route,
 						  const char *path,
 						  const char *method);
 static int api_rest_route_not_found(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_route_unauthorized(struct api_rest_req_ctx *ctx, void *arg);
 static int api_rest_route_access_forbidden(struct api_rest_req_ctx *ctx, void *arg);
 static int api_rest_route_bad_request(struct api_rest_req_ctx *ctx, void *arg);
 static int api_rest_route_request_timeout(struct api_rest_req_ctx *ctx,
@@ -79,7 +81,7 @@ api_rest_new(void)
     api->err.not_found.func = api_rest_route_not_found;
     api->err.request_timeout.func = api_rest_route_request_timeout;
     api->err.internal_error.func = api_rest_route_internal_error;
-    
+    api->err.unauthorized.func = api_rest_route_unauthorized;
     return api;
 }
 
@@ -144,6 +146,10 @@ api_rest_set_error_route(struct api_rest *api, int errcode,
 	route->bad_request.arg = handler_arg;
 	route->bad_request.func = handler;
 	break;
+    case HTTP_STATUS_UNAUTHORIZED:
+	route->unauthorized.arg = handler_arg;
+	route->unauthorized.func = handler;
+	break;
     case HTTP_STATUS_ACCESS_FORBIDDEN:
 	route->access_forbidden.arg = handler_arg;
 	route->access_forbidden.func = handler;
@@ -174,7 +180,7 @@ api_rest_add_route_##method(struct api_rest *api,			\
 			    api_rest_handler_t handler,			\
 			    void *handler_arg)				\
 {									\
-    return api_rest_add_route(api, #method, path, handler, handler_arg); \
+    return api_rest_add_route(api, #method, path, handler, handler_arg);\
 }
 /* method is converted to upper case in the add route function */
 API_REST_ADD_ROUTE(get)
@@ -297,6 +303,9 @@ api_rest_build_response(struct api_rest_req_ctx *ctx)
     case HTTP_STATUS_BAD_REQUEST:
 	firstlinestr = "Bad request";
 	break;
+    case HTTP_STATUS_UNAUTHORIZED:
+	firstlinestr = "Unauthorized";
+	break;
     case HTTP_STATUS_ACCESS_FORBIDDEN:
 	firstlinestr = "Access forbidden";
 	break;
@@ -354,7 +363,7 @@ api_rest_router(struct api_rest *api, struct api_rest_req_ctx *ctx, int cli_fd)
 	if (api_rest_route_check_auth(api, &ctx->in) < 0) {
 	    info("API REST: client:%s method:%s path:%s access forbidden.\n",
 		 ctx->client_ip, ctx->in.method, ctx->in.path);
-	    (void) API_REST_ROUTE(ctx, api->err.access_forbidden);
+	    (void) API_REST_ROUTE(ctx, api->err.unauthorized);
 	    return -1; 
 	}
     }
@@ -493,6 +502,13 @@ static int
 api_rest_route_bad_request(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
 {
     api_rest_ret(ctx, HTTP_STATUS_BAD_REQUEST, API_REST_ERR_BAD_REQUEST);
+    return 0;
+}
+
+static int
+api_rest_route_unauthorized(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
+{
+    api_rest_ret(ctx, HTTP_STATUS_UNAUTHORIZED, API_REST_ERR_UNAUTHORIZED);
     return 0;
 }
 
