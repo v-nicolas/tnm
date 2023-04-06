@@ -34,8 +34,9 @@
 
 #define API_REST_ERR(str) "{\"status\": \"error\", \"info\":"#str"}" 
 #define API_REST_ERR_BAD_REQUEST API_REST_ERR("bad request")
-#define API_REST_ERR_NOT_FOUND API_REST_ERR("page not found")
 #define API_REST_ERR_ACCESS_FORBIDDEN API_REST_ERR("access forbidden")
+#define API_REST_ERR_NOT_FOUND API_REST_ERR("page not found")
+#define API_REST_ERR_REQUEST_TIMEOUT API_REST_ERR("request timeout")
 #define API_REST_ERR_INTERNAL_ERROR API_REST_ERR("internal error")
 
 static void api_rest_free_routes(struct api_rest_route *route);
@@ -57,6 +58,8 @@ static struct api_rest_route * api_rest_get_route(struct api_rest_route *route,
 static int api_rest_route_not_found(struct api_rest_req_ctx *ctx, void *arg);
 static int api_rest_route_access_forbidden(struct api_rest_req_ctx *ctx, void *arg);
 static int api_rest_route_bad_request(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_route_request_timeout(struct api_rest_req_ctx *ctx,
+					  void *arg);
 static int api_rest_route_internal_error(struct api_rest_req_ctx *ctx, void *arg);
     
 struct api_rest *
@@ -72,8 +75,9 @@ api_rest_new(void)
     api->route_protected = 1;
     /* set handler's error default route */
     api->err.bad_request.func = api_rest_route_bad_request;
-    api->err.not_found.func = api_rest_route_not_found;
     api->err.access_forbidden.func = api_rest_route_access_forbidden;
+    api->err.not_found.func = api_rest_route_not_found;
+    api->err.request_timeout.func = api_rest_route_request_timeout;
     api->err.internal_error.func = api_rest_route_internal_error;
     
     return api;
@@ -136,19 +140,23 @@ api_rest_set_error_route(struct api_rest *api, int errcode,
 
     route = &api->err;
     switch (errcode) {
-    case 400:
+    case HTTP_STATUS_BAD_REQUEST:
 	route->bad_request.arg = handler_arg;
 	route->bad_request.func = handler;
 	break;
-    case 404:
-	route->not_found.arg = handler_arg;
-	route->not_found.func = handler;
-	break;
-    case 403:
+    case HTTP_STATUS_ACCESS_FORBIDDEN:
 	route->access_forbidden.arg = handler_arg;
 	route->access_forbidden.func = handler;
 	break;
-    case 501:
+    case HTTP_STATUS_NOT_FOUND:
+	route->not_found.arg = handler_arg;
+	route->not_found.func = handler;
+	break;
+    case HTTP_STATUS_REQUEST_TIMEOUT:
+	route->request_timeout.arg = handler_arg;
+	route->request_timeout.func = handler;
+	break;
+    case HTTP_STATUS_INTERNAL_ERROR:
 	route->internal_error.arg = handler_arg;
 	route->internal_error.func = handler;
 	break;
@@ -159,33 +167,20 @@ api_rest_set_error_route(struct api_rest *api, int errcode,
     return 0;
 }
 
-int
-api_rest_add_route_get(struct api_rest *api, const char *path,
-		       api_rest_handler_t handler, void *handler_arg)
-{
-    return api_rest_add_route(api, HTTP_GET, path, handler, handler_arg);
+#define API_REST_ADD_ROUTE(method)					\
+int									\
+api_rest_add_route_##method(struct api_rest *api,			\
+			    const char *path,				\
+			    api_rest_handler_t handler,			\
+			    void *handler_arg)				\
+{									\
+    return api_rest_add_route(api, #method, path, handler, handler_arg); \
 }
-
-int
-api_rest_add_route_post(struct api_rest *api, const char *path,
-			api_rest_handler_t handler, void *handler_arg)
-{
-    return api_rest_add_route(api, HTTP_POST, path, handler, handler_arg);
-}
-
-int
-api_rest_add_route_put(struct api_rest *api,const char *path,
-		       api_rest_handler_t handler, void *handler_arg)
-{
-    return api_rest_add_route(api, HTTP_PUT, path, handler, handler_arg);
-}
-
-int
-api_rest_add_route_delete(struct api_rest *api, const char *path,
-			  api_rest_handler_t handler, void *handler_arg)
-{
-    return api_rest_add_route(api, HTTP_DELETE, path,  handler, handler_arg);
-}
+/* method is converted to upper case in the add route function */
+API_REST_ADD_ROUTE(get)
+API_REST_ADD_ROUTE(post)
+API_REST_ADD_ROUTE(put)
+API_REST_ADD_ROUTE(delete)
 
 static int
 api_rest_add_route(struct api_rest *api,
@@ -296,19 +291,22 @@ api_rest_build_response(struct api_rest_req_ctx *ctx)
     char date[HTTP_DATE_SIZE];
 
     switch (ctx->out.status_code) {
-    case 200:
+    case HTTP_STATUS_OK:
 	firstlinestr = "OK";
 	break;
-    case 400:
+    case HTTP_STATUS_BAD_REQUEST:
 	firstlinestr = "Bad request";
 	break;
-    case 403:
+    case HTTP_STATUS_ACCESS_FORBIDDEN:
 	firstlinestr = "Access forbidden";
 	break;
-    case 404:
+    case HTTP_STATUS_NOT_FOUND:
 	firstlinestr = "Not found";
 	break;
-    case 501:
+    case HTTP_STATUS_REQUEST_TIMEOUT:
+	firstlinestr = "Not found";
+	break;
+    case HTTP_STATUS_INTERNAL_ERROR:
 	firstlinestr = "Internal error";
 	break;
     default:
@@ -337,9 +335,9 @@ api_rest_router(struct api_rest *api, struct api_rest_req_ctx *ctx, int cli_fd)
     ret = api_rest_read(api, cli_fd, ctx);
     if (ret < 0) {
 	if (ret == HTTP_STATUS_BAD_REQUEST) {
-	    (void) API_REST_ROUTE(ctx, api->err.bad_request);
+	    (void) API_REST_ROUTE(ctx, api->err.bad_request);  
 	} else {
-	    (void) API_REST_ROUTE(ctx, api->err.internal_error);
+	    (void) API_REST_ROUTE(ctx, api->err.request_timeout);
 	}
 	return -1;
     }
@@ -469,6 +467,21 @@ api_rest_get_route(struct api_rest_route *route,
     return NULL;
 }
 
+/* ret (return) */
+void
+api_rest_ret(struct api_rest_req_ctx *ctx, int status_code, const char *payload)
+{
+    ctx->out.status_code = status_code;
+    xfree(ctx->out.payload);
+    if (payload != NULL && *payload != 0) {
+	ctx->out.payload = xstrdup(payload);
+    } else {
+	/* put an empty payload to avoid checking if
+	 * payload equal NULL when build the response */
+	ctx->out.payload = xstrdup("");
+    }
+}
+
 static int
 api_rest_route_not_found(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
 {
@@ -493,24 +506,17 @@ api_rest_route_access_forbidden(struct api_rest_req_ctx *ctx,
 }
 
 static int
+api_rest_route_request_timeout(struct api_rest_req_ctx *ctx,
+			       void *arg ATTR_UNUSED)
+{
+    api_rest_ret(ctx, HTTP_STATUS_REQUEST_TIMEOUT, API_REST_ERR_REQUEST_TIMEOUT);
+    return 0;
+}
+
+static int
 api_rest_route_internal_error(struct api_rest_req_ctx *ctx,
 			      void *arg ATTR_UNUSED)
 {
     api_rest_ret(ctx, HTTP_STATUS_INTERNAL_ERROR, API_REST_ERR_INTERNAL_ERROR);
     return 0;
-}
-
-/* ret (return) */
-void
-api_rest_ret(struct api_rest_req_ctx *ctx, int status_code, const char *payload)
-{
-    ctx->out.status_code = status_code;
-    xfree(ctx->out.payload);
-    if (payload != NULL && *payload != 0) {
-	ctx->out.payload = xstrdup(payload);
-    } else {
-	/* put an empty payload to avoid checking if
-	 * payload equal NULL when build the response */
-	ctx->out.payload = xstrdup("");
-    }
 }

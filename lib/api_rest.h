@@ -65,8 +65,9 @@ struct api_rest_route {
 
 struct api_rest_err_routes {    
     struct api_rest_route_handler bad_request;
-    struct api_rest_route_handler not_found;
     struct api_rest_route_handler access_forbidden;
+    struct api_rest_route_handler not_found;
+    struct api_rest_route_handler request_timeout;
     struct api_rest_route_handler internal_error;
 };
 
