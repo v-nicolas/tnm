@@ -31,6 +31,11 @@
 #include "file_utils.h"
 
 #define API_REST_ROUTE(ctx, route) route.func(ctx, route.arg)
+#define API_REST_SET_ROUTE(route, handler, arg)	\
+    do {						\
+	route.func = handler;				\
+	route.arg = arg;				\
+    } while (0)
 
 #define API_REST_ERR(str) "{\"status\": \"error\", \"info\":"#str"}" 
 #define API_REST_ERR_BAD_REQUEST API_REST_ERR("bad request")
@@ -56,32 +61,34 @@ static int api_rest_route_check_auth(struct api_rest *api,
 static struct api_rest_route * api_rest_get_route(struct api_rest_route *route,
 						  const char *path,
 						  const char *method);
-static int api_rest_route_not_found(struct api_rest_req_ctx *ctx, void *arg);
-static int api_rest_route_unauthorized(struct api_rest_req_ctx *ctx, void *arg);
-static int api_rest_route_access_forbidden(struct api_rest_req_ctx *ctx, void *arg);
-static int api_rest_route_bad_request(struct api_rest_req_ctx *ctx, void *arg);
-static int api_rest_route_request_timeout(struct api_rest_req_ctx *ctx,
+static int api_rest_not_found(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_unauthorized(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_access_forbidden(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_bad_request(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_request_timeout(struct api_rest_req_ctx *ctx,
 					  void *arg);
-static int api_rest_route_internal_error(struct api_rest_req_ctx *ctx, void *arg);
+static int api_rest_internal_error(struct api_rest_req_ctx *ctx, void *arg);
     
 struct api_rest *
 api_rest_new(void)
 {
     struct api_rest *api = NULL;
+    struct api_rest_err_routes *err = NULL;
 
     api = xcalloc(sizeof(struct api_rest));
+    err = &api->err;
     api->srv_ip_version = SOCK_OPT_IPv4_IPv6;
     api->srv_port = API_REST_DEFUALT_PORT;
     api->read_timeout = API_REST_DEFUALT_READ_TIMEOUT;
     /* route is protected by default */
     api->route_protected = 1;
     /* set handler's error default route */
-    api->err.bad_request.func = api_rest_route_bad_request;
-    api->err.access_forbidden.func = api_rest_route_access_forbidden;
-    api->err.not_found.func = api_rest_route_not_found;
-    api->err.request_timeout.func = api_rest_route_request_timeout;
-    api->err.internal_error.func = api_rest_route_internal_error;
-    api->err.unauthorized.func = api_rest_route_unauthorized;
+    err->bad_request.func = api_rest_bad_request;
+    err->access_forbidden.func = api_rest_access_forbidden;
+    err->not_found.func = api_rest_not_found;
+    err->request_timeout.func = api_rest_request_timeout;
+    err->internal_error.func = api_rest_internal_error;
+    err->unauthorized.func = api_rest_unauthorized;
     return api;
 }
 
@@ -130,8 +137,7 @@ api_rest_create_server(struct api_rest *api)
 
 int
 api_rest_set_error_route(struct api_rest *api, int errcode,
-			 api_rest_handler_t handler,
-			 void *handler_arg)
+			 api_rest_handler_t handler, void *arg)
 {
     struct api_rest_err_routes *route = NULL;
     
@@ -143,28 +149,22 @@ api_rest_set_error_route(struct api_rest *api, int errcode,
     route = &api->err;
     switch (errcode) {
     case HTTP_STATUS_BAD_REQUEST:
-	route->bad_request.arg = handler_arg;
-	route->bad_request.func = handler;
+	API_REST_SET_ROUTE(route->bad_request, handler, arg);
 	break;
     case HTTP_STATUS_UNAUTHORIZED:
-	route->unauthorized.arg = handler_arg;
-	route->unauthorized.func = handler;
+	API_REST_SET_ROUTE(route->unauthorized, handler, arg);
 	break;
     case HTTP_STATUS_ACCESS_FORBIDDEN:
-	route->access_forbidden.arg = handler_arg;
-	route->access_forbidden.func = handler;
+	API_REST_SET_ROUTE(route->access_forbidden, handler, arg);
 	break;
     case HTTP_STATUS_NOT_FOUND:
-	route->not_found.arg = handler_arg;
-	route->not_found.func = handler;
+	API_REST_SET_ROUTE(route->not_found, handler, arg);
 	break;
     case HTTP_STATUS_REQUEST_TIMEOUT:
-	route->request_timeout.arg = handler_arg;
-	route->request_timeout.func = handler;
+	API_REST_SET_ROUTE(route->request_timeout, handler, arg);
 	break;
     case HTTP_STATUS_INTERNAL_ERROR:
-	route->internal_error.arg = handler_arg;
-	route->internal_error.func = handler;
+	API_REST_SET_ROUTE(route->internal_error, handler, arg);
 	break;
     default:
 	warn("Invalid errcode <%d>.\n", errcode);
@@ -340,9 +340,11 @@ api_rest_router(struct api_rest *api, struct api_rest_req_ctx *ctx, int cli_fd)
 {
     int ret;
     struct api_rest_route *route = NULL;
-    
+
+    /* api_rest_read return 0 if success else return
+     * the http statue code of error. */
     ret = api_rest_read(api, cli_fd, ctx);
-    if (ret < 0) {
+    if (ret != 0) {
 	if (ret == HTTP_STATUS_BAD_REQUEST) {
 	    (void) API_REST_ROUTE(ctx, api->err.bad_request);  
 	} else {
@@ -431,7 +433,7 @@ api_rest_parse_request(struct http_header *http)
     http_delete_header_payload(http->header.buf);
 
     if (http_parse_first_line(http) < 0) {
-	return 501;
+	return HTTP_STATUS_BAD_REQUEST;
     }
     
     (void) http_get_content_type(http->header.buf, http->content_type);
@@ -469,7 +471,6 @@ api_rest_get_route(struct api_rest_route *route,
     LIST_FOREACH (route, routeptr) {
 	if (strcmp(routeptr->path, path) == 0 &&
 	    strcmp(routeptr->method, method) == 0) {
-	    
 	    return routeptr;
 	}
     }
@@ -492,28 +493,28 @@ api_rest_ret(struct api_rest_req_ctx *ctx, int status_code, const char *payload)
 }
 
 static int
-api_rest_route_not_found(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
+api_rest_not_found(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
 {
     api_rest_ret(ctx, HTTP_STATUS_NOT_FOUND, API_REST_ERR_NOT_FOUND);
     return 0;
 }
 
 static int
-api_rest_route_bad_request(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
+api_rest_bad_request(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
 {
     api_rest_ret(ctx, HTTP_STATUS_BAD_REQUEST, API_REST_ERR_BAD_REQUEST);
     return 0;
 }
 
 static int
-api_rest_route_unauthorized(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
+api_rest_unauthorized(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
 {
     api_rest_ret(ctx, HTTP_STATUS_UNAUTHORIZED, API_REST_ERR_UNAUTHORIZED);
     return 0;
 }
 
 static int
-api_rest_route_access_forbidden(struct api_rest_req_ctx *ctx,
+api_rest_access_forbidden(struct api_rest_req_ctx *ctx,
 				void *arg ATTR_UNUSED)
 {
     api_rest_ret(ctx, HTTP_STATUS_ACCESS_FORBIDDEN,
@@ -522,7 +523,7 @@ api_rest_route_access_forbidden(struct api_rest_req_ctx *ctx,
 }
 
 static int
-api_rest_route_request_timeout(struct api_rest_req_ctx *ctx,
+api_rest_request_timeout(struct api_rest_req_ctx *ctx,
 			       void *arg ATTR_UNUSED)
 {
     api_rest_ret(ctx, HTTP_STATUS_REQUEST_TIMEOUT, API_REST_ERR_REQUEST_TIMEOUT);
@@ -530,7 +531,7 @@ api_rest_route_request_timeout(struct api_rest_req_ctx *ctx,
 }
 
 static int
-api_rest_route_internal_error(struct api_rest_req_ctx *ctx,
+api_rest_internal_error(struct api_rest_req_ctx *ctx,
 			      void *arg ATTR_UNUSED)
 {
     api_rest_ret(ctx, HTTP_STATUS_INTERNAL_ERROR, API_REST_ERR_INTERNAL_ERROR);

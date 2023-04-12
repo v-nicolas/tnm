@@ -20,6 +20,6 @@
 #ifndef NM_VERSION_H
 #define NM_VERSION_H
 
-#define VERSION "0.3.0"
+#define VERSION "unstable_0.3.0"
 
 #endif /* !NM_VERSION_H */
