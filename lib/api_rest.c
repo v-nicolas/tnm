@@ -24,6 +24,7 @@
 #include <stdlib.h>
 
 #include "attr.h"
+#include "str.h"
 #include "mem.h"
 #include "sock.h"
 #include "log.h"
@@ -182,7 +183,7 @@ api_rest_add_route_##method(struct api_rest *api,			\
 {									\
     return api_rest_add_route(api, #method, path, handler, handler_arg);\
 }
-/* method is converted to upper case in the add route function */
+/* method is converted to upper case in api_rest_add_route */
 API_REST_ADD_ROUTE(get)
 API_REST_ADD_ROUTE(post)
 API_REST_ADD_ROUTE(put)
@@ -363,7 +364,7 @@ api_rest_router(struct api_rest *api, struct api_rest_req_ctx *ctx, int cli_fd)
 
     if ((route->option & API_ROUTE_OPT_PROTECTED)) {
 	if (api_rest_route_check_auth(api, &ctx->in) < 0) {
-	    info("API REST: client:%s method:%s path:%s access forbidden.\n",
+	    info("API REST: client:%s method:%s path:%s unauthorized.\n",
 		 ctx->client_ip, ctx->in.method, ctx->in.path);
 	    (void) API_REST_ROUTE(ctx, api->err.unauthorized);
 	    return -1; 
@@ -377,20 +378,17 @@ static int
 api_rest_route_check_auth(struct api_rest *api, struct http_header *in)
 {
     if (api->bearer == NULL || api->bearer[0] == 0) {
-	err("API REST: %s %s is protected but api bearer is empty.\n",
+	err("API REST: <%s %s> is protected but api bearer is empty.\n",
 	    in->method, in->path);
 	return -1;
     }
-    
-    if (strcmp(in->auth_type, HTTP_BEARER_STR) != 0) {
-	err("API REST: %s %s auth type <%s> invalid.\n",
-	    in->method, in->path, in->auth_value);
+    if (STRNEQ(in->auth_type, HTTP_BEARER_STR)) {
+	err("API REST: <%s %s> auth type <%s> invalid.\n",
+	    in->method, in->path, in->auth_type);
 	return -1;	
     }
-
-    if (in->auth_value == NULL ||
-	strcmp(in->auth_value, api->bearer) != 0) {
-	err("API REST: %s %s Bad bearer value <%s>.\n",
+    if (in->auth_value == NULL || STRNEQ(in->auth_value, api->bearer)) {
+	err("API REST: <%s %s> Bad bearer value <%s>.\n",
 	    in->method, in->path,
 	    (in->auth_value) ? "-" : in->auth_value);
 	return -1;
@@ -469,8 +467,8 @@ api_rest_get_route(struct api_rest_route *route,
 
     DEBUG("Search route: <%s> <%s>\n", method, path);
     LIST_FOREACH (route, routeptr) {
-	if (strcmp(routeptr->path, path) == 0 &&
-	    strcmp(routeptr->method, method) == 0) {
+	if (STREQ(routeptr->path, path) &&
+	    STREQ(routeptr->method, method)) {
 	    return routeptr;
 	}
     }
