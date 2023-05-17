@@ -25,7 +25,7 @@
 #include "../lib/mem.h"
 #include "../lib/str.h"
 #include "../lib/sbuf.h"
-#include "../lib/dlist.h"
+#include "../lib/list.h"
 #include "../lib/sock.h"
 #include "../lib/http.h"
 #include "../lib/json_utils.h"

@@ -28,7 +28,7 @@
 #include "mem.h"
 #include "sock.h"
 #include "log.h"
-#include "dlist.h"
+#include "list.h"
 #include "file_utils.h"
 
 #define API_REST_ROUTE(ctx, route) route.func(ctx, route.arg)

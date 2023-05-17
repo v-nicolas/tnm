@@ -38,7 +38,7 @@
 #include "../lib/mem.h"
 #include "../lib/str.h"
 #include "../lib/progname.h"
-#include "../lib/dlist.h"
+#include "../lib/list.h"
 #include "../lib/sock.h"
 #include "../lib/file_utils.h"
 #include "../lib/nm_common.h"

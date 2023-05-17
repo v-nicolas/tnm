@@ -23,7 +23,7 @@
 
 #include "../lib/mem.h"
 #include "../lib/log.h"
-#include "../lib/dlist.h"
+#include "../lib/list.h"
 #include "../lib/str.h"
 #include "../lib/json_utils.h"
 #include "../lib/nm_common.h"

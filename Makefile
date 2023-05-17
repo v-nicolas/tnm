@@ -1,5 +1,5 @@
 
-CC=		/usr/bin/gcc
+CC=		gcc
 
 PROG=		tnm
 TOOL=		tnmctl

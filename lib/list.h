@@ -80,4 +80,19 @@
 	}					\
     } while (0);
 
+#define DLIST_UNLINK2(r, c)                      \
+    do {                                        \
+        if (*r == c) {                           \
+            *r = (*r)->next;                     \
+            if (*r != NULL) {                    \
+                (*r)->prev = NULL;               \
+            }                                   \
+        } else {                                \
+            c->prev->next = c->next;            \
+            if (c->next != NULL) {              \
+                c->next->prev = c->prev;        \
+            }                                   \
+        }                                       \
+    } while (0);
+
 #endif /* not have LIB_DLIST_H */
