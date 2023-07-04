@@ -30,9 +30,11 @@
 #include "../lib/http.h"
 #include "../lib/json_utils.h"
 #include "../lib/nm_common.h"
+#include "../lib/api_rest.h"
 
 static int cmd_parse(const char *buffer, struct cmd *cmd);
 static int cmd_exec(struct cmd *cmd);
+static int cmd_control(struct cmd *cmd);
 static int cmd_monit_type_port(struct cmd *cmd);
 static int cmd_monit_type_ping(struct cmd *cmd);
 static int cmd_monit_type_http(struct cmd *cmd);
@@ -97,6 +99,9 @@ cmd_handler(const char *json, struct cmd *cmd)
 	/* Always in reply */
 	sbuf_vadd(&cmd->reply, JSON_SET_INT("status", 0)); 
 	sbuf_vadd(&cmd->reply, JSON_SET_INT("command", cmd->type));
+	if (cmd->type == CMD_CONTROL && cmd->type_ctrl > -1) {
+	    sbuf_vadd(&cmd->reply, JSON_SET_INT("command_ctrl", cmd->type_ctrl));
+	}
     }
     
     sbuf_add_to_offset(&cmd->reply, 0, JSON_OPEN);
@@ -140,8 +145,8 @@ cmd_exec(struct cmd *cmd)
     case CMD_LIST:
 	ret = cmd_host_list(cmd);
 	break;
-    case CMD_RELOAD_HOSTS_FILE:
-	ret = cmd_host_reload(cmd);
+    case CMD_CONTROL:
+	ret = cmd_control(cmd);
 	break;
     case CMD_MONIT_RESUME:
 	ret = cmd_host_resume(cmd);
@@ -160,6 +165,42 @@ cmd_exec(struct cmd *cmd)
     
     return 0;
 }
+
+static int
+cmd_control(struct cmd *cmd)
+{
+    int ret;
+    struct json_var jvar = JSON_INIT_NBR("command_ctrl", &cmd->type_ctrl);
+
+    if (json_get_var(cmd->monitor, &jvar) < 0) {
+        cmd->error = dump_err(NM_ERR_TYPE_CTRL_INVALID);
+	return -1;
+    }
+
+    DEBUG("Command control <%d>\n", cmd->type_ctrl);
+
+    ret = 0;
+    switch (cmd->type_ctrl) {
+    case CMD_CTRL_RELOAD_HOSTS:
+	ret = cmd_host_reload(cmd);
+	break;
+    case CMD_CTRL_API_REST_STATS:
+	api_rest_get_stats(nm->api, &cmd->reply);
+	break;
+    case CMD_CTRL_API_REST_STATS_ENABLE:
+	api_rest_stats_enable(nm->api);
+	break;
+    case CMD_CTRL_API_REST_STATS_DISABLE:
+	api_rest_stats_disable(nm->api);
+	break;
+    default:
+	cmd->error = dump_err(NM_ERR_TYPE_INVALID);
+	ret = -1;
+    }
+    
+    return ret;
+}
+
 
 int
 cmd_add_host(struct cmd *cmd)

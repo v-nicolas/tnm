@@ -42,6 +42,11 @@ enum api_rest_route_options {
     API_ROUTE_OPT_PROTECTED = (1 << 0),
 };
 
+enum api_rest_options {
+    API_OPT_SRV_SSL	= (1 << 0), /* not yet */
+    API_OPT_STATS	= (1 << 1),
+};
+
 struct api_rest_req_ctx {
     char client_ip[INET6_ADDRSTRLEN];
     struct http_header in;
@@ -72,6 +77,17 @@ struct api_rest_err_routes {
     struct api_rest_route_handler internal_error;
 };
 
+struct api_rest_stats {
+    unsigned long long nreq;
+    unsigned long long err;
+    unsigned long long bad_request;
+    unsigned long long unauthorized;
+    unsigned long long access_forbidden;
+    unsigned long long not_found;
+    unsigned long long req_timeout;
+    unsigned long long internal_err;
+};
+
 struct api_rest {
     int option;
     int srv_fd;
@@ -83,9 +99,13 @@ struct api_rest {
     char *bearer;
     struct api_rest_route *routes;
     struct api_rest_err_routes err;
+    struct api_rest_stats stats;
 };
 
 struct api_rest * api_rest_new(void);
+void api_rest_get_stats(struct api_rest *api, struct sbuf *str);
+void api_rest_stats_enable(struct api_rest *api);
+void api_rest_stats_disable(struct api_rest *api);
 void api_rest_set_route_protected(struct api_rest *api, int enable);
 void api_rest_free(struct api_rest *api);
 int api_rest_create_server(struct api_rest *api);

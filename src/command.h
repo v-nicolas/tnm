@@ -29,6 +29,7 @@
 
 struct cmd {
     int type;
+    int type_ctrl;
     int type_init;
     char *error;
     cJSON *monitor;

@@ -96,15 +96,15 @@ static int
 nm_prepare_api_rest_routes(void)
 {
     api_rest_set_route_protected(nm->api, API_REST_ENBALE_PROTECTED_ROUTE);
-    if (api_rest_add_route_post(nm->api, "/host",
+    if (api_rest_add_route_post(nm->api, "/",
 				http_route_host_manage, NULL) < 0) {
 	return -1;
     }
-    if (api_rest_add_route_delete(nm->api, "/host",
+    if (api_rest_add_route_delete(nm->api, "/",
 				  http_route_host_manage, NULL) < 0) {
 	return -1;
     }
-    if (api_rest_add_route_get(nm->api, "/host",
+    if (api_rest_add_route_get(nm->api, "/",
 			       http_route_host_manage, NULL) < 0) {
 	return -1;
     }

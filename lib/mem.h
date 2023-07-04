@@ -30,5 +30,6 @@ void xfree(void *p);
 void * xrealloc(void *p, size_t size);
 void xfreeauto(void *p);
 char * xstrdup(const char *src);
+void xstrredup(char **dst, const char *src);
 
 #endif /* not have LIB_MEM_H */

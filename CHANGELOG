@@ -7,8 +7,10 @@
 	- Create http tests.
 	- List hosts add new fields <n_hosts> in reply.
 	- Update README.
-	- Add APIRest option to dial with tnm.
+	- Add API Rest option to dial with tnm.
+	- Create new variable command_ctrl to manage program option.
 	- Fix and clean code.
+	- With tnmctl possibility to send a raw json in file.
 
   07.02.2023 tnm-unstable_0.2.0:
 	- Compil if libssl is not installed.

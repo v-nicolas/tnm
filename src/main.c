@@ -52,6 +52,7 @@ enum program_arguments {
     ARG_NO_HOST_FILE,
     ARG_NO_DB,
     ARG_CONFIG_FILE,
+    ARG_HTTP_STATS,
     ARG_HTTP_PORT,
     ARG_HTTP_BIND_ADDR,
     ARG_HTTP_BEARER,
@@ -176,6 +177,7 @@ parse_program_options(int argc, char **argv)
 	{"no-db",            no_argument,       NULL, ARG_NO_DB},
 	{"ctl-sock-path",    required_argument, NULL, 'c'},
 	{"priv-sock-path",   required_argument, NULL, 'p'},
+	{"http-stats",	     no_argument,	NULL, ARG_HTTP_STATS},
 	{"http-port",        required_argument, NULL, ARG_HTTP_PORT},
 	{"http-bind-addr",   required_argument, NULL, ARG_HTTP_BIND_ADDR},
 	{"http-bearer",	     required_argument, NULL, ARG_HTTP_BEARER},
@@ -215,35 +217,26 @@ parse_program_options(int argc, char **argv)
 	    break;
 	    
 	case 'c':
-	    if (nm->ctl_sock_path != NULL) {
-		xfree(nm->ctl_sock_path);
-	    }
-	    nm->ctl_sock_path = xstrdup(optarg);
+	    xstrredup(&nm->ctl_sock_path, optarg);
 	    break;
 	case 'p':
-	    if (nm->priv_sock_path != NULL) {
-		xfree(nm->priv_sock_path);
-	    }
-	    nm->priv_sock_path = xstrdup(optarg);
+	    xstrredup(&nm->priv_sock_path, optarg);
 	    break;
 	    
 	/* HTTP arguments */
+	case ARG_HTTP_STATS:
+	    nm->api->option |= API_OPT_STATS;
+	    break;
 	case ARG_HTTP_PORT:
 	    if (xstrtol(optarg, &nm->api->srv_port, 10) < 0) {
 		fatal("Invalid HTTP port\n");
 	    }
 	    break;
 	case ARG_HTTP_BIND_ADDR:
-	    if (nm->api->srv_bind_addr) {
-		xfree(nm->api->srv_bind_addr);
-	    }
-	    nm->api->srv_bind_addr = xstrdup(optarg);
+	    xstrredup(&nm->api->srv_bind_addr, optarg);
 	    break;
 	case ARG_HTTP_BEARER:
-	    if (nm->api->bearer) {
-		xfree(nm->api->bearer);
-	    }
-	    nm->api->bearer = xstrdup(optarg);
+	    xstrredup(&nm->api->bearer, optarg);
 	    break;
 	case ARG_HTTP_IPV4_ONLY:
 	    nm->api->srv_ip_version = SOCK_OPT_IPv4_ONLY;
@@ -345,6 +338,7 @@ usage(void)
 	   "  -s, --script          : Set the script to run when a host have changed state.\n"
            "  -c, --ctl-sock-path   : Set the full path to control socket unix.\n"
            "  -p, --priv-sock-path  : Set the full path to private socket unix.\n"
+	   "      --http-stats      : Enable API REST stats.\n"
 	   "      --http-port       : Set HTTP server port to enbale API REST option\n"
 	   "      --http-bind-addr  : Set binding address (default any).\n"
 	   "      --http-bearer     : Set the Bearer token to secure access "

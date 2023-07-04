@@ -29,6 +29,7 @@
 #include "sock.h"
 #include "log.h"
 #include "list.h"
+#include "json_utils.h"
 #include "file_utils.h"
 
 #define API_REST_ROUTE(ctx, route) route.func(ctx, route.arg)
@@ -54,7 +55,8 @@ static int api_rest_add_route(struct api_rest *api,
 			      void *handler_argument);
 static void api_rest_req_ctx_free(struct api_rest_req_ctx *ctx);
 static int api_rest_accept_client(int srv_fd, struct api_rest_req_ctx *ctx);
-static void api_rest_build_response(struct api_rest_req_ctx *ctx);
+static void api_rest_build_response(struct api_rest *api,
+				    struct api_rest_req_ctx *ctx);
 static int api_rest_router(struct api_rest *api,
 			   struct api_rest_req_ctx *ctx, int cli_fd);
 static int api_rest_route_check_auth(struct api_rest *api,
@@ -69,6 +71,7 @@ static int api_rest_bad_request(struct api_rest_req_ctx *ctx, void *arg);
 static int api_rest_request_timeout(struct api_rest_req_ctx *ctx,
 					  void *arg);
 static int api_rest_internal_error(struct api_rest_req_ctx *ctx, void *arg);
+static void api_rest_inc_err(struct api_rest *api, unsigned long long *err);
     
 struct api_rest *
 api_rest_new(void)
@@ -94,8 +97,51 @@ api_rest_new(void)
 }
 
 void
+api_rest_get_stats(struct api_rest *api, struct sbuf *str)
+{
+    sbuf_vadd(str, JSON_SET_INT("enable",
+				(api->option & API_OPT_STATS) ? 1 : 0));
+    sbuf_vadd(str, JSON_SET_ULLONG("nreq", api->stats.nreq));
+    sbuf_vadd(str, JSON_SET_ULLONG("err", api->stats.err));
+    sbuf_vadd(str, JSON_SET_ULLONG("bad_request", api->stats.bad_request));
+    sbuf_vadd(str, JSON_SET_ULLONG("unauthorized", api->stats.unauthorized));
+    sbuf_vadd(str, JSON_SET_ULLONG("access_forbidden",
+				   api->stats.access_forbidden));
+    sbuf_vadd(str, JSON_SET_ULLONG("not_found", api->stats.not_found));
+    sbuf_vadd(str, JSON_SET_ULLONG("req_timeouted", api->stats.req_timeout));
+    sbuf_vadd(str, JSON_SET_ULLONG("internal_error", api->stats.internal_err));
+}
+
+void
+api_rest_stats_enable(struct api_rest *api)
+{
+    if (api == NULL) {
+	warn("API is not initialized\n");
+	return;
+    }
+    api->option |= API_OPT_STATS;
+}
+
+/* Disable and clean stats */
+void
+api_rest_stats_disable(struct api_rest *api)
+{
+    if (api == NULL) {
+	warn("API is not initialized\n");
+	return;
+    }
+    api->option &= ~(API_OPT_STATS);
+    memset(&api->stats, 0, sizeof(struct api_rest_stats));
+}
+
+
+void
 api_rest_set_route_protected(struct api_rest *api, int enable)
 {
+    if (api == NULL) {
+	warn("API is not initialized\n");
+	return;
+    }
     api->route_protected = enable;
 }
 
@@ -251,7 +297,7 @@ api_rest_client_handler(struct api_rest *api)
     http_header_init(&ctx.out);
 
     (void) api_rest_router(api, &ctx, cli_fd);
-    api_rest_build_response(&ctx);
+    api_rest_build_response(api, &ctx);
     if (sbuf_len(&ctx.out.header) > 0) {
 	(void) sock_write_fd(cli_fd, ctx.out.header.buf, ctx.out.header.offset);
     }
@@ -292,7 +338,7 @@ api_rest_accept_client(int srv_fd, struct api_rest_req_ctx *ctx)
 }
 
 static void
-api_rest_build_response(struct api_rest_req_ctx *ctx)
+api_rest_build_response(struct api_rest *api, struct api_rest_req_ctx *ctx)
 {
     const char *firstlinestr = NULL;
     char date[HTTP_DATE_SIZE];
@@ -303,21 +349,27 @@ api_rest_build_response(struct api_rest_req_ctx *ctx)
 	break;
     case HTTP_STATUS_BAD_REQUEST:
 	firstlinestr = "Bad request";
+	api_rest_inc_err(api, &api->stats.bad_request);
 	break;
     case HTTP_STATUS_UNAUTHORIZED:
 	firstlinestr = "Unauthorized";
+	api_rest_inc_err(api, &api->stats.unauthorized);
 	break;
     case HTTP_STATUS_ACCESS_FORBIDDEN:
 	firstlinestr = "Access forbidden";
+	api_rest_inc_err(api, &api->stats.access_forbidden);
 	break;
     case HTTP_STATUS_NOT_FOUND:
 	firstlinestr = "Not found";
+	api_rest_inc_err(api, &api->stats.not_found);
 	break;
     case HTTP_STATUS_REQUEST_TIMEOUT:
-	firstlinestr = "Not found";
+	firstlinestr = "Request timouted";
+	api_rest_inc_err(api, &api->stats.req_timeout);
 	break;
     case HTTP_STATUS_INTERNAL_ERROR:
 	firstlinestr = "Internal error";
+	api_rest_inc_err(api, &api->stats.internal_err);
 	break;
     default:
 	firstlinestr = "";
@@ -342,6 +394,10 @@ api_rest_router(struct api_rest *api, struct api_rest_req_ctx *ctx, int cli_fd)
     int ret;
     struct api_rest_route *route = NULL;
 
+    if ((api->option & API_OPT_STATS)) {
+	api->stats.nreq++;
+    }
+    
     /* api_rest_read return 0 if success else return
      * the http statue code of error. */
     ret = api_rest_read(api, cli_fd, ctx);
@@ -534,4 +590,13 @@ api_rest_internal_error(struct api_rest_req_ctx *ctx,
 {
     api_rest_ret(ctx, HTTP_STATUS_INTERNAL_ERROR, API_REST_ERR_INTERNAL_ERROR);
     return 0;
+}
+
+static void
+api_rest_inc_err(struct api_rest *api, unsigned long long *err)
+{
+    if ((api->option & API_OPT_STATS)) {
+	(*err)++;
+	api->stats.err++;
+    }
 }

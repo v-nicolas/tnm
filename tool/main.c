@@ -38,6 +38,10 @@ enum prog_options {
     ARG_MONIT_SUSPEND,
     ARG_MONIT_RESUME,
     ARG_HUMAN_OUTPUT,
+    ARG_JSON_FILE,
+    ARG_API_REST_STATS,
+    ARG_API_REST_STATS_DISABLE,
+    ARG_API_REST_STATS_ENABLE,
     ARG_HTTP_METHOD,
     ARG_HTTP_VERSION,
     ARG_HTTP_PATH,
@@ -47,6 +51,12 @@ enum prog_options {
 };
 
 static int run(struct control *x);
+static int run_json_file(struct control *x, struct sbuf *str);
+static int run_cmd(struct control *x, struct sbuf *str);
+static int cmd_control(struct control *x, struct sbuf *str);
+static int api_rest_get_stats(struct control *x, struct sbuf *str);
+static int api_rest_stats_change_status(struct control *x,
+					struct sbuf *str, int status);
 static int host_add(struct control *x, struct sbuf *str);
 static int host_del(struct control *x, struct sbuf *str);
 static int host_list(struct control *x, struct sbuf *str);
@@ -87,34 +97,118 @@ static int
 run(struct control *x)
 {
     int ret;
-    struct sbuf str = SBUF_INIT; 
+    struct sbuf str = SBUF_INIT;
+    
+    if (x->jfile_path[0] != 0) {
+	ret = run_json_file(x, &str);
+    } else {
+	ret = run_cmd(x, &str);
+    }
 
+    sbuf_free(&str);
+    return ret;
+}
+
+static int
+run_json_file(struct control *x, struct sbuf *str)
+{
+    int ret;
+
+    ret = sbuf_read_file(str, x->jfile_path);
+    if (ret < 0) {
+	err("Read json file <%s> %s: %s\n",
+	    x->jfile_path,
+	    sbuf_rdfile_get_func_fail(ret), STRERRNO);
+	return -1;
+    }
+    
+    /* final '}' add in send_cmd, so delete this */
+    sbuf_trim_blank(str);
+    sbuf_trim_char(str, '}');
+
+    return send_cmd(x, str);
+}
+
+static int
+run_cmd(struct control *x, struct sbuf *str)
+{
+    int ret;
+    
     switch (x->cmd) {
     case CMD_ADD:
-	ret = host_add(x, &str);
+	ret = host_add(x, str);
 	break;
     case CMD_DEL:
-	ret = host_del(x, &str);
+	ret = host_del(x, str);
 	break;
     case CMD_LIST:
-	ret = host_list(x, &str);
-	break;
-    case CMD_RELOAD_HOSTS_FILE:
-	ret = host_reload(x, &str);
+	ret = host_list(x, str);
 	break;
     case CMD_MONIT_SUSPEND:
-	ret = host_monit_suspend(x, &str);
+	ret = host_monit_suspend(x, str);
 	break;
     case CMD_MONIT_RESUME:
-	ret = host_monit_resume(x, &str);
+	ret = host_monit_resume(x, str);
+	break;
+    case CMD_CONTROL:
+	ret = cmd_control(x, str);
 	break;
     default:
 	fatal("Unknow command `%d'.\n", x->cmd);
 	return -1;
     }
 
-    sbuf_free(&str);
     return ret;
+}
+
+static int
+cmd_control(struct control *x, struct sbuf *str)
+{
+    int ret;
+    
+    switch (x->cmd_ctrl) {
+    case CMD_CTRL_RELOAD_HOSTS:
+	ret = host_reload(x, str);
+	break;
+    case CMD_CTRL_API_REST_STATS:
+	ret = api_rest_get_stats(x, str);
+	break;
+    case CMD_CTRL_API_REST_STATS_ENABLE:
+	ret = api_rest_stats_change_status(x, str, 1);
+	break;
+    case CMD_CTRL_API_REST_STATS_DISABLE:
+	ret = api_rest_stats_change_status(x, str, 0);
+	break;
+    default:
+	fatal("Unknow control command `%d'.\n", x->cmd);
+        ret = -1;
+    }
+    
+    return ret;
+}
+
+static int
+api_rest_get_stats(struct control *x, struct sbuf *str)
+{
+    sbuf_add(str, JSON_OPEN);
+    sbuf_vadd(str, JSON_SET_INT("command", CMD_CONTROL));
+    sbuf_vadd(str, JSON_SET_INT("command_ctrl", CMD_CTRL_API_REST_STATS));
+    return send_cmd(x, str);
+}
+
+static int
+api_rest_stats_change_status(struct control *x, struct sbuf *str, int status)
+{
+    sbuf_add(str, JSON_OPEN);
+    sbuf_vadd(str, JSON_SET_INT("command", CMD_CONTROL));
+    if (status) {
+	sbuf_vadd(str, JSON_SET_INT("command_ctrl",
+				    CMD_CTRL_API_REST_STATS_ENABLE));
+    } else {
+	sbuf_vadd(str, JSON_SET_INT("command_ctrl",
+				    CMD_CTRL_API_REST_STATS_DISABLE));
+    }
+    return send_cmd(x, str);
 }
 
 static int
@@ -214,7 +308,8 @@ static int
 host_reload(struct control *x, struct sbuf *str)
 {
     sbuf_add(str, JSON_OPEN);
-    sbuf_vadd(str, JSON_SET_INT("command", CMD_RELOAD_HOSTS_FILE));
+    sbuf_vadd(str, JSON_SET_INT("command", CMD_CONTROL));
+    sbuf_vadd(str, JSON_SET_INT("command_ctrl", CMD_CTRL_RELOAD_HOSTS));
     if (x->path[0] != 0) {
 	sbuf_vadd(str, JSON_SET_STR("path", x->path));
     }
@@ -308,6 +403,7 @@ parse_program_options(int argc, char **argv, struct control *x)
 	{"suspend",       required_argument, NULL, ARG_MONIT_SUSPEND},
 	{"resume",        no_argument,       NULL, ARG_MONIT_RESUME},
 	{"reload-hosts",  no_argument,       NULL, ARG_RELOAD_HOSTS},
+	{"jfile",         required_argument, NULL, ARG_JSON_FILE},
 
 	/* command arguments */
 	{"hostname",   required_argument, NULL, 'H'},
@@ -320,12 +416,15 @@ parse_program_options(int argc, char **argv, struct control *x)
 	{"uuid",       required_argument, NULL, 'U'},
 	{"ssl",        no_argument,       NULL, ARG_SSL},
 	/* http */
-	{"http-method",      required_argument, NULL, ARG_HTTP_METHOD},
-	{"http-version",     required_argument, NULL, ARG_HTTP_VERSION},
-	{"http-path",        required_argument, NULL, ARG_HTTP_PATH},
-	{"http-user-agent",  required_argument, NULL, ARG_HTTP_USER_AGENNT},
-	{"http-auth-type",   required_argument, NULL, ARG_HTTP_AUTH_TYPE},
-	{"http-auth-value",  required_argument, NULL, ARG_HTTP_AUTH_VALUE},
+	{"http-method",        required_argument, NULL, ARG_HTTP_METHOD},
+	{"http-version",       required_argument, NULL, ARG_HTTP_VERSION},
+	{"http-path",          required_argument, NULL, ARG_HTTP_PATH},
+	{"http-user-agent",    required_argument, NULL, ARG_HTTP_USER_AGENNT},
+	{"http-auth-type",     required_argument, NULL, ARG_HTTP_AUTH_TYPE},
+	{"http-auth-value",    required_argument, NULL, ARG_HTTP_AUTH_VALUE},
+	{"api-rest-stats",         no_argument,   NULL, ARG_API_REST_STATS},
+	{"api-rest-stats-disable", no_argument,   NULL, ARG_API_REST_STATS_DISABLE},
+	{"api-rest-stats-enable", no_argument,   NULL, ARG_API_REST_STATS_ENABLE},
 
 	/* output */
 	{"no-json",    no_argument,       NULL, ARG_HUMAN_OUTPUT},
@@ -363,7 +462,8 @@ parse_program_options(int argc, char **argv, struct control *x)
 	    x->cmd = CMD_LIST;
 	    break;
 	case ARG_RELOAD_HOSTS:
-	    x->cmd = CMD_RELOAD_HOSTS_FILE;
+	    x->cmd = CMD_CONTROL;
+	    x->cmd_ctrl = CMD_CTRL_RELOAD_HOSTS;
 	    break;
 	case ARG_MONIT_SUSPEND:
 	    x->cmd = CMD_MONIT_SUSPEND;
@@ -373,6 +473,9 @@ parse_program_options(int argc, char **argv, struct control *x)
 	    break;
 	case ARG_MONIT_RESUME:
 	    x->cmd = CMD_MONIT_RESUME;
+	    break;
+	case ARG_JSON_FILE:
+	    strncpy(x->jfile_path, optarg, (PATH_MAX-1));
 	    break;
 
 	/* Command arguments */
@@ -452,12 +555,25 @@ parse_program_options(int argc, char **argv, struct control *x)
 	    }
 	    break;
 	case ARG_HTTP_AUTH_TYPE:
-	    x->http_auth_type = xstrdup(optarg);
+	    strncpy(x->http_auth_type, optarg, HTTP_AUTHORIZATION_SIZE-1);
 	    break;
 	case ARG_HTTP_AUTH_VALUE:
 	    x->http_auth_value = xstrdup(optarg);
 	    break;
-	default: break;
+	case ARG_API_REST_STATS:
+	    x->cmd = CMD_CONTROL;
+	    x->cmd_ctrl = CMD_CTRL_API_REST_STATS;
+	    break;
+	case ARG_API_REST_STATS_DISABLE:
+	    x->cmd = CMD_CONTROL;
+	    x->cmd_ctrl = CMD_CTRL_API_REST_STATS_DISABLE;
+	    break;
+	case ARG_API_REST_STATS_ENABLE:
+	    x->cmd = CMD_CONTROL;
+	    x->cmd_ctrl = CMD_CTRL_API_REST_STATS_ENABLE;
+	    break;
+	default:
+	    break;
         }
     } while (current_arg != -1);
 
@@ -509,15 +625,20 @@ usage(void)
 	   "  -s, --ctl-sock-path : Socket unix path to dial with the program.\n"
 	   "  -p, --path          : file path (example reload).\n"
 	   "\n"
+	   
 	   "Commands:\n"
-	   "  -a, --add          : Add new hosts.\n"
-	   "  -r, --remove       : Remove one host by uuid.\n"
-	   "  -l, --list         : List all hosts.\n"
-	   "      --suspend      : Suspend the monitoring for one or all hosts.\n"
-	   "      --resume       : Restart the monitoring when is suspended.\n"
-	   "      --reload-hosts : Reload all hosts.\n"
-
+	   "  -a, --add              : Add new hosts.\n"
+	   "  -r, --remove           : Remove one host by uuid.\n"
+	   "  -l, --list             : List all hosts.\n"
+	   "      --suspend          : Suspend the monitoring for one or all hosts.\n"
+	   "      --resume           : Restart the monitoring when is suspended.\n"
+	   "      --reload-hosts     : Reload all hosts.\n"
+	   "      --api-rest-stats         : Get API Rest stats.\n"
+	   "      --api-rest-stats-enbale  : Enable API Rest stats.\n"
+	   "      --api-rest-stats-disable : Disable API Rest stats.\n"
+	   "      --jfile            : File path to read JSON.\n"
 	   "\n"
+	   
 	   "Commands arguments:\n"
 	   "  -H, --hostname   : Set hostname.\n"
 	   "  -I, --ip         : Set host IP.\n"
@@ -529,6 +650,7 @@ usage(void)
 	   "  -U, --uuid       : Set host UUID.\n"
 	   "      --ssl        : Use SSL to monitoring type port && HTTP.\n"
 	   "\n"
+	   
 	   "HTTP options:\n"
 	   "      --http-method        : Set http method (default: GET).\n"
 	   "      --http-version       : Set HTTP protocol version (Default HTTP 1.1).\n"

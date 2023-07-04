@@ -46,6 +46,7 @@ struct control {
     int fd;
     char *sockpath;
     int cmd;
+    int cmd_ctrl;
     int port;
     int monit;
     int ip_version;
@@ -53,8 +54,9 @@ struct control {
     int frequency;
     int protocol;
     int options;
-    char *http_auth_type;
     char *http_auth_value;
+    char jfile_path[PATH_MAX];
+    char http_auth_type[HTTP_AUTHORIZATION_SIZE];
     char http_path[HTTP_PATH_SIZE];
     char http_method[HTTP_METHOD_SIZE];
     char http_version[HTTP_VERSION_SIZE];
