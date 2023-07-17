@@ -26,9 +26,13 @@ const char *
 get_date(unsigned long timestamp, char *date)
 {
     struct tm *tm = NULL;
-    
+
+    memset(date, 0, DATE_SIZE);
     tm = localtime((time_t *) &timestamp);
-    if (strftime(date, DATE_SIZE, "%d/%m/%Y %H:%M:%S", tm) == 0) {
+    if (tm != NULL) {
+	(void) strftime(date, DATE_SIZE, "%d/%m/%Y %H:%M:%S", tm);
+    }
+    if (date[0] == 0) {
         strncpy(date, "[get_date_error]", DATE_SIZE);
     }
     return date;

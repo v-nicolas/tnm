@@ -51,7 +51,7 @@ xfopen(const char *path, const char *mode)
 int
 xclose(int fd)
 {
-    if (fd < 1) {
+    if (fd > 1) {
 	if (close(fd) < 0) {
 	    warn("close: %s\n", STRERRNO);
 	    return -1;

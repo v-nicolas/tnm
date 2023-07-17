@@ -46,6 +46,17 @@ enum socket_ret {
     SOCK_RET_HTTP_ERROR = -3,
 };
 
+enum socket_type {
+    SOCK_TYPE_UNIX,
+    SOCK_TYPE_TCP,
+};
+
+enum sock_srv_options {
+    SOCK_OPT_IPv4_ONLY,
+    SOCK_OPT_IPv6_ONLY,
+    SOCK_OPT_IPv4_IPv6,
+};
+
 struct sock_recvfrom {
     int timeout;
     size_t bufsize;
@@ -74,6 +85,7 @@ struct sock {
 };
 
 int socku_server_create(const char *path);
+int sock_server_create(const char *bind_addr, int port, int option);
 int socku_client_create(const char *path);
 void socku_close(int fd, char *path);
 int sock_connect(struct sock *sock, int timeout);

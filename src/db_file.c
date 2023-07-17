@@ -64,7 +64,7 @@ db_file_host_update(void *data ATTR_UNUSED)
     sbuf_add(&cmd.reply, JSON_OPEN);
     if (cmd_host_list(&cmd) < 0) {
 	err("Fail to update host file: %s.\n", cmd.error);
-	cmd_free_data(&cmd);
+	cmd_free_all_data(&cmd);
 	return -1;
     }
     json_close(&cmd.reply, JSON_CLOSE);
@@ -73,14 +73,14 @@ db_file_host_update(void *data ATTR_UNUSED)
 	file = fopen(nm->hosts_path, "w+");
 	if (file == NULL) {
 	    err("Open <%s>: %s\n", nm->hosts_path, STRERRNO);
-	    cmd_free_data(&cmd);
+	    cmd_free_all_data(&cmd);
 	    return -1;
 	}
 	fprintf(file, "%s", cmd.reply.buf);
 	fclose(file);
     }
     
-    cmd_free_data(&cmd);
+    cmd_free_all_data(&cmd);
     return 0;
 }
 

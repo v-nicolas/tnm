@@ -45,6 +45,7 @@
 #define NM_ERR_TIMEOUT               "Operation timeouted."
 #define NM_ERR_JSON_INVALID          "Fail to parse JSON." /* todo: is used ? */
 #define NM_ERR_TYPE_INVALID          "Command type missing or invalid."
+#define NM_ERR_TYPE_CTRL_INVALID     "Command type control missing or invalid."
 #define NM_ERR_UUID_MISSING          "UUID missing or empty."
 #define NM_ERR_UUID_NOT_FOUND        "UUID not found."
 #define NM_ERR_UUID_ALREADY_USED     "UUID already used."
@@ -72,7 +73,14 @@ enum commands_names {
     CMD_LIST          = 4,
     CMD_MONIT_SUSPEND = 5,
     CMD_MONIT_RESUME  = 6,
-    CMD_RELOAD_HOSTS_FILE = 7,
+    CMD_CONTROL       = 7,
+};
+
+enum commands_control {
+    CMD_CTRL_RELOAD_HOSTS,
+    CMD_CTRL_API_REST_STATS,
+    CMD_CTRL_API_REST_STATS_ENABLE,
+    CMD_CTRL_API_REST_STATS_DISABLE,
 };
 
 enum monoting_list {

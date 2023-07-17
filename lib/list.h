@@ -27,6 +27,31 @@
 
 #define LIST_FOREACH(r, c) for (c = r; c; c = c->next)
 
+#define SLIST_LINK_HEAD(r, c)			\
+    do {					\
+	c->next = NULL;				\
+	if (r == NULL) {			\
+	    r = c;				\
+	} else {				\
+	    c->next = r;			\
+	    r = c;				\
+	}					\
+    } while (0);
+
+#define SLIST_LINK_TAIL(r, c)			\
+    do {					\
+	c->next = NULL;				\
+	if (r == NULL) {			\
+	    r = c;				\
+	} else {				\
+	    typeof(r) _sListPtr = r;		\
+	    while (_sListPtr->next) {		\
+		_sListPtr = _sListPtr->next;	\
+	    }					\
+	    _sListPtr->next = c;		\
+	}					\
+    } while (0);
+
 #define DLIST_LINK(r, c)			\
     do {					\
 	c->prev = NULL;				\
@@ -53,6 +78,21 @@
 		c->next->prev = c->prev;	\
 	    }					\
 	}					\
+    } while (0);
+
+#define DLIST_UNLINK2(r, c)                      \
+    do {                                        \
+        if (*r == c) {                           \
+            *r = (*r)->next;                     \
+            if (*r != NULL) {                    \
+                (*r)->prev = NULL;               \
+            }                                   \
+        } else {                                \
+            c->prev->next = c->next;            \
+            if (c->next != NULL) {              \
+                c->next->prev = c->prev;        \
+            }                                   \
+        }                                       \
     } while (0);
 
 #endif /* not have LIB_DLIST_H */

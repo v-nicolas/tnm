@@ -1,5 +1,5 @@
 
-CC=		/usr/bin/gcc
+CC=		gcc
 
 PROG=		tnm
 TOOL=		tnmctl
@@ -10,6 +10,7 @@ LIB=		./lib/
 
 PROG_CSOURCE=	$(PROG_SRC)main.c	\
 		$(PROG_SRC)nm.c		\
+		$(PROG_SRC)nm_prepare.c	\
 		$(PROG_SRC)command.c	\
 		$(PROG_SRC)host.c	\
 		$(PROG_SRC)icmp.c	\
@@ -17,6 +18,7 @@ PROG_CSOURCE=	$(PROG_SRC)main.c	\
 		$(PROG_SRC)db.c		\
 		$(PROG_SRC)mongo.c	\
 		$(PROG_SRC)db_file.c	\
+		$(PROG_SRC)http_routes.c\
 		$(LIB)nm_common.c	\
 		$(LIB)sock.c		\
 		$(LIB)http.c		\
@@ -28,7 +30,8 @@ PROG_CSOURCE=	$(PROG_SRC)main.c	\
 		$(LIB)sbuf.c		\
 		$(LIB)uuid.c		\
 		$(LIB)json_utils.c	\
-		$(LIB)cJSON.c
+		$(LIB)cJSON.c		\
+		$(LIB)api_rest.c
 
 TOOL_CSOURCE=	$(TOOL_SRC)main.c
 

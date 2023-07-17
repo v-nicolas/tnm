@@ -85,6 +85,68 @@ socku_server_create(const char *path)
     return fdserv;
 }
 
+int
+sock_server_create(const char *bind_addr, int port, int option)
+{
+    int fd;
+    int opt;
+    struct sock sock;
+
+    sock.type = SOCK_STREAM;
+    sock.proto = 0;
+    sock.port = port;
+    
+    if (bind_addr == NULL) {
+	if (option == SOCK_OPT_IPv4_ONLY) {
+	    sock.family = AF_INET;
+	} else {
+	    sock.family = AF_INET6;
+	}
+    }
+
+    if (sock_resolv_addr(bind_addr, &sock) < 0) {
+	return -1;
+    }
+    DEBUG("HTTP server bind address: %s\n", sock.straddr);
+    
+    fd = socket(sock.family, sock.type, sock.proto);
+    if (fd < 0) {
+	err("socket: %s\n", STRERRNO);
+	return -1;
+    }
+
+    opt = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+	err("setsockopt SO_REUSEADDR->true: %s\n", STRERRNO);
+	goto error;
+    }
+
+    if (option == SOCK_OPT_IPv6_ONLY) {
+	opt = 1;
+	if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY,
+		       (char*)&opt, sizeof(opt)) < 0) {
+	    err("setsockopt IPV6_ONLY->true: %s\n", STRERRNO);
+	    goto error;
+	}
+    }
+    
+    if (bind(fd, (struct sockaddr *)&sock.addr, sock.addrlen) < 0) {
+	err("bind: %s\n", STRERRNO);
+	goto error;
+    }
+    
+    if (listen(fd, 64) < 0) {
+	err("bind: %s\n", STRERRNO);
+	goto error;
+    }
+    
+    return fd;
+
+error:
+    close(fd);
+    return -1;
+}
+
 static int
 sock_set_non_block(int sockfd)
 {
@@ -452,7 +514,8 @@ sock_resolv_addr(const char *addr, struct sock *sock)
     hints.ai_flags = AI_PASSIVE;
 
     if (sock->port != 0) {
-	/* TODO: create test to pservice == NULL ans explan this why NULL is not a problem. */
+	/* TODO: create test to pservice == NULL ans explan
+	 * this why NULL is not a problem. */
         if (snprintf(service, (PORT_STR_LEN-1), "%d", sock->port) < 0) {
             err("Fail to convert port `%d' string\n", sock->port);
             return -1;

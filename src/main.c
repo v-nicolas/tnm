@@ -25,11 +25,13 @@
 #include "nm.h"
 #include "db.h"
 #include "version.h"
+#include "nm_prepare.h"
 
 #include "../lib/attr.h"
 #include "../lib/log.h"
 #include "../lib/str.h"
 #include "../lib/mem.h"
+#include "../lib/sock.h"
 #include "../lib/json_utils.h"
 
 #define CONF_FILE_LOCAL_DIR     "./config/nm-conf.json"
@@ -50,10 +52,17 @@ enum program_arguments {
     ARG_NO_HOST_FILE,
     ARG_NO_DB,
     ARG_CONFIG_FILE,
+    ARG_HTTP_STATS,
+    ARG_HTTP_PORT,
+    ARG_HTTP_BIND_ADDR,
+    ARG_HTTP_BEARER,
+    ARG_HTTP_IPV4_ONLY,
+    ARG_HTTP_IPV6_ONLY,
+    ARG_HTTP_DISABLE_API_REST,
 };
 
 const char *progname;
-
+#include "../lib/http.h"
 int
 main(int argc, char **argv)
 {
@@ -64,7 +73,7 @@ main(int argc, char **argv)
     parse_config_file();
     daemonize();
     nm_prepare();
-    ret = nm_run();
+    ret = nm_main_loop();
     nm_free();
     return (ret == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
@@ -104,10 +113,11 @@ parse_config_file(void)
     jvar.name = "daemon";
     if (json_get_var(m, &jvar) == 0) {
 	if (STREQ(jvar.sval, YES)) {
-	    nm->bg = 1;
+	    nm->options |= OPT_RUN_BG;
 	}
     }
 
+    /* Database type */
     jvar.name = "db_type";
     if (json_get_var(m, &jvar) == 0) {
 	if (STREQ(jvar.sval, "mongo")) {
@@ -117,15 +127,30 @@ parse_config_file(void)
 	}
     }
 
+    /* Bearer value (string pointer)
+     * Only parsed if not set by argument
+     */
+    if (nm->api->bearer == NULL) {
+	jvar.name = "http_bearer";
+	jvar.str_size = 0;
+	jvar.svalptr = &nm->api->bearer;
+	(void) json_get_var(m, &jvar);
+    }
+
+    /* todo add http port option */
+    /* todo add http bind option */
+    jvar.svalptr = NULL;
+    jvar.sval = buffer;
+    jvar.str_size = sizeof(buffer);
     set_config_var(m, "script_path", nm->script_path, PATH_SIZE, &jvar);
     set_config_var(m, "pid_file", nm->pid_file, PATH_SIZE, &jvar);
     set_config_var(m, "script", nm->script_path, PATH_SIZE, &jvar);
     set_config_var(m, "hosts_path", nm->hosts_path, PATH_SIZE, &jvar);
     set_config_var(m, "socket_private", nm->priv_sock_path, PATH_SIZE, &jvar);
     set_config_var(m, "socket_control", nm->ctl_sock_path, PATH_SIZE, &jvar);
+    
     cJSON_Delete(m);
 }
-
 
 static void
 set_config_var(cJSON *monitor,
@@ -139,25 +164,31 @@ set_config_var(cJSON *monitor,
     }
 }
 
-
 static void
 parse_program_options(int argc, char **argv)
 {
     int arg;
     struct option const opt_index[] = {
-	{"help",           no_argument,       NULL, 'h'},
-	{"version",        no_argument,       NULL, 'v'},
-	{"daemon",         no_argument,       NULL, 'd'},
-	{"conf",           required_argument, NULL, ARG_CONFIG_FILE},
-	{"pid-file",       required_argument, NULL, 'P'},
-	{"no-db",          no_argument,       NULL, ARG_NO_DB},
-	{"ctl-sock-path",  required_argument, NULL, 'c'},
-	{"priv-sock-path", required_argument, NULL, 'p'},
-	{"db_uri",         required_argument, NULL, 'U'},
-	{"db_file",        required_argument, NULL, 'F'},
-	{"script",         required_argument, NULL, 's'},
-	{"log-file-err",   required_argument, NULL, 'E'},
-	{"log-file-info",  required_argument, NULL, 'I'},
+	{"help",             no_argument,       NULL, 'h'},
+	{"version",          no_argument,       NULL, 'v'},
+	{"daemon",           no_argument,       NULL, 'd'},
+	{"conf",             required_argument, NULL, ARG_CONFIG_FILE},
+	{"pid-file",         required_argument, NULL, 'P'},
+	{"no-db",            no_argument,       NULL, ARG_NO_DB},
+	{"ctl-sock-path",    required_argument, NULL, 'c'},
+	{"priv-sock-path",   required_argument, NULL, 'p'},
+	{"http-stats",	     no_argument,	NULL, ARG_HTTP_STATS},
+	{"http-port",        required_argument, NULL, ARG_HTTP_PORT},
+	{"http-bind-addr",   required_argument, NULL, ARG_HTTP_BIND_ADDR},
+	{"http-bearer",	     required_argument, NULL, ARG_HTTP_BEARER},
+	{"http-ipv6-only",   no_argument,       NULL, ARG_HTTP_IPV6_ONLY},
+	{"http-ipv4-only",   no_argument,       NULL, ARG_HTTP_IPV4_ONLY},
+	{"disable-api-rest", no_argument,       NULL, ARG_HTTP_DISABLE_API_REST},
+	{"db_uri",           required_argument, NULL, 'U'},
+	{"db_file",          required_argument, NULL, 'F'},
+	{"script",           required_argument, NULL, 's'},
+	{"log-file-err",     required_argument, NULL, 'E'},
+	{"log-file-info",    required_argument, NULL, 'I'},
 	{NULL,             0,                 NULL, 0},
     };
     
@@ -172,7 +203,7 @@ parse_program_options(int argc, char **argv)
 	    version();
 	    break;
 	case 'd':
-	    nm->bg = 1;
+	    nm->options |= OPT_RUN_BG;
 	    break;
 	case ARG_CONFIG_FILE:
 	    strncpy(nm->conf_file, optarg, (PATH_SIZE-1));
@@ -186,18 +217,37 @@ parse_program_options(int argc, char **argv)
 	    break;
 	    
 	case 'c':
-	    if (nm->ctl_sock_path != NULL) {
-		xfree(nm->ctl_sock_path);
-	    }
-	    nm->ctl_sock_path = xstrdup(optarg);
+	    xstrredup(&nm->ctl_sock_path, optarg);
 	    break;
 	case 'p':
-	    if (nm->priv_sock_path != NULL) {
-		xfree(nm->priv_sock_path);
-	    }
-	    nm->priv_sock_path = xstrdup(optarg);
+	    xstrredup(&nm->priv_sock_path, optarg);
 	    break;
-
+	    
+	/* HTTP arguments */
+	case ARG_HTTP_STATS:
+	    nm->api->option |= API_OPT_STATS;
+	    break;
+	case ARG_HTTP_PORT:
+	    if (xstrtol(optarg, &nm->api->srv_port, 10) < 0) {
+		fatal("Invalid HTTP port\n");
+	    }
+	    break;
+	case ARG_HTTP_BIND_ADDR:
+	    xstrredup(&nm->api->srv_bind_addr, optarg);
+	    break;
+	case ARG_HTTP_BEARER:
+	    xstrredup(&nm->api->bearer, optarg);
+	    break;
+	case ARG_HTTP_IPV4_ONLY:
+	    nm->api->srv_ip_version = SOCK_OPT_IPv4_ONLY;
+	    break;
+	case ARG_HTTP_IPV6_ONLY:
+	    nm->api->srv_ip_version = SOCK_OPT_IPv6_ONLY;
+	    break;
+	case ARG_HTTP_DISABLE_API_REST:
+	    nm->options |= OPT_DISABLE_API_REST;
+	    break;
+	    
 	case 'U':
 	    nm->db_type = DB_TYPE_MONGO;
 	    strncpy(nm->hosts_path, optarg, (PATH_SIZE-1));
@@ -230,7 +280,7 @@ daemonize(void)
 {
     pid_t pid;
 
-    if (nm->bg == 0) {
+    if ((nm->options & OPT_RUN_BG) == 0) {
 	nm->pid_file[0] = 0;
 	return;
     }
@@ -288,6 +338,16 @@ usage(void)
 	   "  -s, --script          : Set the script to run when a host have changed state.\n"
            "  -c, --ctl-sock-path   : Set the full path to control socket unix.\n"
            "  -p, --priv-sock-path  : Set the full path to private socket unix.\n"
+	   "      --http-stats      : Enable API REST stats.\n"
+	   "      --http-port       : Set HTTP server port to enbale API REST option\n"
+	   "      --http-bind-addr  : Set binding address (default any).\n"
+	   "      --http-bearer     : Set the Bearer token to secure access "
+	   "      --http-ipv4-only  : If bind address not set, HTTP server use"
+	   " only IPv4 (by default use v4 and v6).\n"
+	   "      --http-ipv6-only  : If bind address not set, HTTP server use"
+	   " only IPv6 (by default use v4 and v6).\n"
+	   "      --disable-api-rest: Disable API REST server.\n"
+	   "at the API REST.\n"
 	   "  -E, --log-file-err    : Log error in specifics file (default stderr).\n"
 	   "  -I, --log-file-info   : Log information in specifics file (default stdout).\n",
            progname, progname);

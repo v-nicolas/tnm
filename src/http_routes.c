@@ -17,33 +17,29 @@
  *  along with tnm. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NM_COMMAND_H
-#define NM_COMMAND_H
+#include "http_routes.h"
+#include "command.h"
 
-#include "../lib/sbuf.h"
-#include "../lib/cJSON.h"
+#include "../lib/attr.h"
+#include "../lib/api_rest.h"
+#include "../lib/sock.h"
+#include "../lib/http.h"
 
-#ifndef CMD_SIZE
-# define CMD_SIZE 2048
-#endif /* !CMD_SIZE */
+int
+http_route_host_manage(struct api_rest_req_ctx *ctx, void *arg ATTR_UNUSED)
+{
+    int ret;
+    struct cmd cmd;
 
-struct cmd {
-    int type;
-    int type_ctrl;
-    int type_init;
-    char *error;
-    cJSON *monitor;
-    struct host *host;
-    struct sbuf reply;
-};
+    cmd_init(&cmd);
+    ret = cmd_handler(ctx->in.payload, &cmd);
+    if (ret != -1) {
+	api_rest_ret(ctx, HTTP_STATUS_OK, cmd.reply.buf);
+	cmd_free_after_exec(&cmd);
+    } else {
+	api_rest_ret(ctx, HTTP_STATUS_INTERNAL_ERROR, cmd.reply.buf);
+	cmd_free_all_data(&cmd);
+    }
 
-void cmd_init(struct cmd *cmd);
-void cmd_free_after_exec(struct cmd *cmd);
-void cmd_free_all_data(struct cmd *cmd);
-int cmd_handler(const char *json, struct cmd *cmd);
-int cmd_add_host(struct cmd *cmd);
-int cmd_host_list(struct cmd *cmd);
-void cmd_host_to_json(struct cmd *cmd, struct host *host);
-int cmd_check_host_fields(struct cmd *cmd);
-
-#endif /* !NM_COMMAND_H */
+    return 0;
+}

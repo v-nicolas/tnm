@@ -94,3 +94,10 @@ xstrdup(const char *src)
 
     return dst;
 }
+
+void
+xstrredup(char **dst, const char *src)
+{
+    xfree(*dst);
+    *dst = xstrdup(src);
+}

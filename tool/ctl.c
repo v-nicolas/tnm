@@ -49,7 +49,6 @@ void
 control_free(struct control *x)
 {
     xfree(x->sockpath);
-    xfree(x->http_auth_type);
     xfree(x->http_auth_value);
     xclose(x->fd);
 }

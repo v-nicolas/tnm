@@ -28,8 +28,15 @@
 static struct database db;
 
 void
+db_disable(void)
+{
+    memset(&db, 0, sizeof(db));
+}
+
+void
 db_init(int db_type)
 {
+    memset(&db, 0, sizeof(db));
     if (db_type == DB_TYPE_FILE) {
 	db.test_connection = &db_file_test_open;
 	db.host_add = &db_file_host_update;
