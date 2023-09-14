@@ -27,9 +27,9 @@
 #ifndef NDEBUG
 # define DEBUG(...)				\
     do {					\
-	fprintf(stderr, "%s: %s %s(%d): ",	\
+	fprintf(stderr, "%s: %s:%d %s(): ",	\
 		progname, __FILE__,		\
-		__func__, __LINE__);		\
+		__LINE__, __func__);		\
 	fprintf(stderr, __VA_ARGS__);		\
     } while (0)
 #else

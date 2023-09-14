@@ -55,6 +55,7 @@ void
 cmd_init(struct cmd *cmd)
 {
     memset(cmd, 0, sizeof(struct cmd));
+    cmd->type_ctrl = -1;
     sbuf_init(&cmd->reply);
     cmd->host = host_init_ptr();
 }
