@@ -125,7 +125,7 @@ nm_sig_interrupt_handler(int signum ATTR_UNUSED)
     MUTEX_UNLOCK(&nm->run_mutex);
 }
 
-void *
+ATTR_NORETURN void *
 nm_ctl_thread(void *arg ATTR_UNUSED)
 {
     DEBUG("Main loop started...\n");
@@ -665,7 +665,10 @@ nm_host_monitoring(void *arg)
 	case MONIT_HTTP:
 	    host->state = nm_monit_http(host);
 	    break;
-	default: break;
+	default:
+	    sock->close(sock);
+	    return -1;
+	    break;
 	}
 
 	sock->close(sock);

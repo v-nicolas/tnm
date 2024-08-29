@@ -2,7 +2,8 @@
 	CHANGELOG
 
 
-  next-version:
+	tnm-unstable_0.4.3.0:
+	- Add compilation flags
 	- Fix mongo test compilation.
 	- Create http tests.
 	- List hosts add new fields <n_hosts> in reply.

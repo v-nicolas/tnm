@@ -274,6 +274,8 @@ api_rest_add_route(struct api_rest *api,
     new_route->handler.func = handler;
     new_route->handler.arg = handler_argument;
     strncpy(new_route->method, method, (HTTP_METHOD_SIZE-1));
+    /* Only for warning, this variable is cleaned by xcalloc on structure */
+    new_route->method[HTTP_METHOD_SIZE-1] = 0;
     strncpy(new_route->path, path, (API_REST_ROUTE_SIZE-1));
     if (api->route_protected) {
 	new_route->option |= API_ROUTE_OPT_PROTECTED;

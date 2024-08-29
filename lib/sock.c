@@ -95,6 +95,7 @@ sock_server_create(const char *bind_addr, int port, int option)
     sock.type = SOCK_STREAM;
     sock.proto = 0;
     sock.port = port;
+    sock.family = AF_UNSPEC;
     
     if (bind_addr == NULL) {
 	if (option == SOCK_OPT_IPv4_ONLY) {
@@ -581,7 +582,12 @@ ssl_init(struct sock *sock)
     OpenSSL_add_ssl_algorithms();
     meth = TLS_client_method();
     SSL_load_error_strings();
+
+    /* Deprecated function with version 3.0 */
+# if OPENSSL_VERSION_MAJOR < 3
     ERR_load_BIO_strings();
+# endif /* OPENSSL_VERSION_MAJOR */
+    
     SSL_load_error_strings();
 
     sock->ssl_ctx = SSL_CTX_new(meth);

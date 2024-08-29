@@ -38,7 +38,7 @@ TOOL_CSOURCE=	$(TOOL_SRC)main.c
 PROG_OBJS=	$(PROG_CSOURCE:.c=.o)
 TOOL_OBJS=	$(TOOL_CSOURCE:.c=.o)
 
-CFLAGS=		-g2 -O0 -W -Wall -Wextra -pedantic -Wpedantic -std=c11 \
+CFLAGS=		-W -Wall -Wextra -pedantic -Wpedantic -std=c11 \
 		-Wbad-function-cast -Wcast-align -Wcast-qual \
 		-Wconversion -Wdate-time -Wfloat-equal \
 		-Wformat=2 -Winit-self -Wnested-externs \
@@ -46,8 +46,10 @@ CFLAGS=		-g2 -O0 -W -Wall -Wextra -pedantic -Wpedantic -std=c11 \
 		-Wpointer-arith -Wshadow -Wstack-protector \
 		-Wstrict-prototypes -Wswitch-default -Wwrite-strings  \
 		-Wmissing-prototypes -Wformat-security -fstack-protector-strong \
+		-fstack-clash-protection -Wstrict-overflow=5 -Wunreachable-code  -Wstringop-overflow=4 \
 		-Wduplicated-cond -Wformat-signedness -Wjump-misses-init -Wlogical-op \
-		-Wnormalized -Wsuggest-attribute=format \
+		-Wnormalized -Walloc-zero -Wbool-operation \
+		-Wsuggest-attribute=format -Wmissing-noreturn -Waddress \
 		-Wtrampolines -pie -fPIE \
 		-D_FORTIFY_SOURCE=2 \
 		-D_GNU_SOURCE \
